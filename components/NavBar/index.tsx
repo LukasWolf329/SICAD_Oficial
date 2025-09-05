@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/build/Ionicons';
-import { Redirect, router } from 'expo-router';
+import { Link, Redirect, router } from 'expo-router';
 import React, { useState } from 'react';
-import { Dimensions, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { Linking ,Dimensions, Image, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 interface InputProps {  
@@ -32,43 +32,68 @@ export function NavBar(){
   );
 }
 
-export function SideBar(){
+export function SideBar({children}: {children?: React.ReactNode}){
   return (
-    <View
-      className='p-4 w-3/12'
-      style={{position: 'absolute', left: 0, top: 100, zIndex: 10}}
-    >
-
-      <Text className='text-2xl color-white font-bold mb-4'>Gestão</Text>
-
-      <Pressable className='flex-row items-center mb-4 color-slate-500 hover:color-white'>
-        <Text className="text-2xl ml-1 color-slate-400 hover:color-white "><Ionicons name="home" size={24} className='mr-2'/>Inicio</Text>
-      </Pressable>
-      <Pressable className='flex-row items-center mb-4 color-slate-500 hover:color-white'>
-        <Text className="text-2xl ml-1 color-slate-400 hover:color-white "><Ionicons name="ticket" size={24} className='mr-2'/>Ingresso</Text>
-      </Pressable>
-      <Pressable
-        className='flex-row items-center mb-4 color-slate-500 hover:color-white'
-        onPress={() => router.push('./certificates')}
-      >
-        <Text className="text-2xl ml-1 color-slate-400 hover:color-white ">
-          <Ionicons name="medal-sharp" size={24} className='mr-2'/>Certificados
-        </Text>
-      </Pressable>
-
+    <View className='p-4 w-3/12' style={{position: 'absolute', left: 0, top: 100, zIndex: 10}}  >
+      {children}
     </View>
   );
 }
 
-export function Mainframe(){
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+interface SideBarCategoryItem {
+  nome: string;
+  icone: IoniconName;
+  link: string;
+}
+
+interface SideBarCategoryProps {
+  titulo: string;
+  itens: SideBarCategoryItem[];
+}
+
+export function SideBarCategory({ titulo, itens }: SideBarCategoryProps) {
+  return (
+    <View>
+      <Text className='text-2xl color-slate-600 dark:color-white font-bold mb-4'>{titulo}</Text>
+      <View>
+        {itens.map((item, idx) => (
+          <Pressable
+            key={idx}
+            className='flex-row items-center mb-4 mx-4 color-slate-500 hover:color-white'
+            onPress={() => router.push(item.link)}
+          >
+            <Text className="text-2xl ml-1 color-slate-400 hover:color-black dark:hover:color-white">
+            <Ionicons name={item.icone} size={24} className='mr-2' />
+              {item.nome}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function Mainframe({children, name, photoUrl, link}: {children?: React.ReactNode; name: string; photoUrl?: string; link?: string}){
   const screenHeight = Dimensions.get('window').height;
+  const screenWidth = Dimensions.get('window').width;
   return (
-    <View
-      className='w-9/12 bg-white dark:bg-gray-950 p-4 self-end'
-      style={{ height: screenHeight - 150, alignSelf: 'flex-end', borderBottomLeftRadius: 20 }}
-
-    >
-        
+    <View className='bg-white dark:bg-gray-950 p-4 pb-20 self-end' style={{alignSelf: 'flex-end', borderBottomLeftRadius: 20 , width: '80%'}}>
+      <View className='flex-row m-8 items-center'>
+        <Image source={require('../../assets/images/user.png')} style={{width:80, height:80}} className='rounded-full'/>
+        <View>
+          <Text className='text-2xl mx-4 font-semibold'>{name}</Text>
+          {link != null &&(
+            <Pressable onPress={() => Linking.openURL(`https://${link}`)}>
+              <Text className='text-sky-500 mx-4 font-semibold'>{link}</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+      {children}
     </View>
   );
 }
+
+

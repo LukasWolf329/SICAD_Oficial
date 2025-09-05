@@ -29,7 +29,13 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen
-        name="(painel)/profile/certificates"
+        name="(painel)/profile/page-org"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="(painel)/certificate/certificates"
         options={{ headerShown: false }}
       />
     </Stack>
