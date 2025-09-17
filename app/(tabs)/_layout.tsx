@@ -38,6 +38,10 @@ export default function RootLayout() {
         name="(painel)/certificate/certificates"
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="(painel)/certificate/certicateScreen"
+        options={{ headerShown: false }}
+      />
     </Stack>
     
   );

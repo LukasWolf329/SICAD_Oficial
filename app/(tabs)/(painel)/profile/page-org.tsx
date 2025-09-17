@@ -9,7 +9,7 @@ import { InfoBox } from "@/components/InfoBox";
 
 export default function Profile() {
   return (
-    <ScrollView className="flex-1 bg-slate-50 dark:bg-black">
+    <ScrollView className="flex-1 bg-   -50 dark:bg-black">
         <NavBar></NavBar>
         
         <SideBar>
@@ -18,11 +18,11 @@ export default function Profile() {
                 itens={[
                     { nome: "Inicio", icone: "home-outline", link: "" },
                     { nome: "Pessoas", icone: "people", link: "/peoples" },
-                    { nome: "Vendas", icone: "cash", link: "/config" }
+                    //{ nome: "Vendas", icone: "cash", link: "/config" }
                 ]}
             ></SideBarCategory>
             <SideBarCategory
-                titulo="Pos-Evento"
+                titulo="Pós-Evento"
                 itens={[
                     { nome: "Certificados", icone: "map", link: "../certificate" },
                 ]}

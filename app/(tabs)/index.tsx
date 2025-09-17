@@ -13,7 +13,7 @@ export default function Login() {
 
   function handleSignIn() {
     console.log('Login com:', { email, senha });
-    navigate('/(tabs)/(painel)/profile/page'); // Redireciona para a página de perfil após o login
+    navigate('/(tabs)/(painel)/profile/page-org'); // Redireciona para a página de perfil após o login
   }
   return (
     <View className="flex-1 flex-row">
