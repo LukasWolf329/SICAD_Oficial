@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Editor de Certificados</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <style>
+    body { display: flex; gap: 20px; font-family: Arial, sans-serif; }
+    canvas { border: 1px solid #ccc; display: block; margin-bottom: 15px; }
+    #toolbar { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+    #templates { display: flex; gap: 10px; margin-top: 10px; }
+    #templates img {
+      width: 120px; height: auto; border: 2px solid #ccc;
+      cursor: pointer; border-radius: 6px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    #templates img:hover { transform: scale(1.05); border-color: #666; }
+    #shapesPanel { display: flex; flex-direction: column; gap: 8px;
+      padding: 10px; border: 1px solid #ddd; border-radius: 6px; max-width: 150px;
+    }
+    #shapesPanel button { padding: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <!-- Painel lateral com formas -->
+  <div id="shapesPanel">
+    <h4>Formas</h4>
+    <button onclick="addShape('rect')">Quadrado</button>
+    <button onclick="addShape('circle')">Círculo</button>
+    <button onclick="addShape('triangle')">Triângulo</button>
+
+    <h4>Linhas</h4>
+    <button onclick="addLine('normal')">Linha</button>
+    <button onclick="addLine('dashed')">Linha Tracejada</button>
+    <button onclick="addLine('arrow')">Seta</button>
+    <button onclick="addLine('dashedArrow')">Seta Tracejada</button>
+
+    <h4>Estilo</h4>
+    <label>Cor:
+      <input type="color" id="shapeColor" value="#007bff" onchange="updateShapeColor(this.value)">
+    </label>
+    <label>
+      <input type="checkbox" id="noFill" onchange="toggleFill()"> Sem preenchimento
+    </label>
+
+    <h4>Tags</h4>
+    <select id="tagSelector" onchange="insertTag(this.value)">
+      <option value="">-- Inserir Tag --</option>
+      <option value="{{NOME}}">Nome do Participante</option>
+      <option value="{{ATIVIDADE}}">Nome da Atividade</option>
+      <option value="{{ASSINATURA}}">Assinatura</option>
+    </select>
+  </div>
+
+  <!-- Área principal -->
+  <div style="flex:1">
+    <div id="toolbar">
+      <button onclick="addText()">Adicionar Texto</button>
+
+      <!-- Fonte -->
+      <label>Fonte:
+        <select id="fontFamily" onchange="updateText('fontFamily', this.value)">
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Verdana">Verdana</option>
+          <option value="Georgia">Georgia</option>
+        </select>
+      </label>
+
+      <!-- Cor -->
+      <label>Cor:
+        <input type="color" id="fontColor" onchange="updateText('fill', this.value)">
+      </label>
+
+      <!-- Tamanho -->
+      <label>Tamanho:
+        <input type="number" id="fontSize" value="24" min="8" max="100" onchange="updateText('fontSize', this.value)">
+      </label>
+
+      <!-- Estilos -->
+      <button onclick="toggleStyle('bold')">Negrito</button>
+      <button onclick="toggleStyle('italic')">Itálico</button>
+      <button onclick="toggleStyle('underline')">Sublinhar</button>
+
+      <!-- Alinhamento -->
+      <label>Alinhamento:
+        <select id="textAlign" onchange="updateText('textAlign', this.value)">
+          <option value="left">Esquerda</option>
+          <option value="center">Centro</option>
+          <option value="right">Direita</option>
+        </select>
+      </label>
+
+      <!-- Upload de imagem -->
+      <input type="file" id="imgLoader">
+
+      <!-- Download -->
+      <button onclick="download()">Baixar</button>
+    </div>
+
+    <canvas id="c" width="800" height="600"></canvas>
+
+    <!-- Galeria de Templates -->
+    <div id="templates">
+      <img src="assets/images/certificados/certificado1.png" alt="Template 1" onclick="setTemplate(this.src)">
+      <img src="assets/images/certificados/certificado2.png" alt="Template 2" onclick="setTemplate(this.src)">
+      <img src="assets/images/certificados/certificado3.png" alt="Template 3" onclick="setTemplate(this.src)">
+      <img src="assets/images/certificados/certificado4.png" alt="Template 4" onclick="setTemplate(this.src)">
+    </div>
+  </div>
+
+  <script>
+    const canvas = new fabric.Canvas('c');
+
+    // ===== Texto =====
+    function addText() {
+      const text = new fabric.IText('Digite aqui', { left:100, top:100, fontSize:24, fontFamily:'Arial', fill:'#000' });
+      canvas.add(text);
+      canvas.setActiveObject(text);
+    }
+
+    function updateText(property, value) {
+      const active = canvas.getActiveObject();
+      if (!active || active.type !== 'i-text') return;
+      const val = property === 'fontSize' ? parseInt(value,10) : value;
+      if (property === 'fill') {
+        if (active.selectionStart !== active.selectionEnd) active.setSelectionStyles({ fill: val });
+        else active.set('fill', val);
+      } else active.set(property, val);
+      canvas.requestRenderAll();
+    }
+
+    function toggleStyle(style) {
+      const active = canvas.getActiveObject();
+      if (active && active.type === 'i-text') {
+        if (style==='bold') active.set("fontWeight", active.fontWeight==='bold'?'normal':'bold');
+        else if (style==='italic') active.set("fontStyle", active.fontStyle==='italic'?'normal':'italic');
+        else if (style==='underline') active.set("underline", !active.underline);
+        canvas.requestRenderAll();
+      }
+    }
+
+    // ===== Upload de Imagem =====
+    document.getElementById('imgLoader').onchange = function(e) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        fabric.Image.fromURL(event.target.result, function(img) {
+          img.scaleToWidth(300);
+          canvas.add(img);
+        });
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    };
+
+    // ===== Templates =====
+    function setTemplate(src) {
+      fabric.Image.fromURL(src, function(img) {
+        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+          scaleX: canvas.width / img.width,
+          scaleY: canvas.height / img.height
+        });
+      });
+    }
+
+    // ===== Download =====
+    function download() {
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL({ format:'jpeg' });
+      link.download = 'certificado.jpeg';
+      link.click();
+    }
+
+    // ===== Formas =====
+    function addShape(type) {
+      const color = document.getElementById('shapeColor').value;
+      const noFill = document.getElementById('noFill').checked;
+      const fillColor = noFill?'':color;
+      let shape;
+      if(type==='rect') shape = new fabric.Rect({left:100, top:100, width:100, height:100, fill:fillColor, stroke:color, strokeWidth:2});
+      else if(type==='circle') shape = new fabric.Circle({left:150, top:150, radius:50, fill:fillColor, stroke:color, strokeWidth:2});
+      else if(type==='triangle') shape = new fabric.Triangle({left:200, top:200, width:100, height:100, fill:fillColor, stroke:color, strokeWidth:2});
+      canvas.add(shape);
+      canvas.setActiveObject(shape);
+    }
+
+    // ===== Linhas =====
+    function addLine(type) {
+      const color = document.getElementById('shapeColor').value;
+      let line;
+      if(type==='normal') line = new fabric.Line([50,50,200,50], {stroke:color, strokeWidth:3});
+      else if(type==='dashed') line = new fabric.Line([50,100,200,100], {stroke:color, strokeWidth:3, strokeDashArray:[10,5]});
+      else if(type==='arrow' || type==='dashedArrow') {
+        line = new fabric.Line([50,150,200,150], {stroke:color, strokeWidth:3, strokeDashArray:type==='dashedArrow'?[10,5]:null});
+        const triangle = new fabric.Triangle({ left:200, top:150, originX:'center', originY:'center', angle:90, width:15, height:15, fill:color });
+        line = new fabric.Group([line, triangle], { left:50, top:140 });
+      }
+      canvas.add(line);
+      canvas.setActiveObject(line);
+    }
+
+    function updateShapeColor(color) {
+      const active = canvas.getActiveObject();
+      if(!active) return;
+      if(active.type==='rect'||active.type==='circle'||active.type==='triangle') {
+        if(!document.getElementById('noFill').checked) active.set('fill', color);
+        active.set('stroke', color);
+      } else active.set('stroke', color);
+      canvas.requestRenderAll();
+    }
+
+    function toggleFill() {
+      const active = canvas.getActiveObject();
+      if(!active) return;
+      const color = document.getElementById('shapeColor').value;
+      if(document.getElementById('noFill').checked) active.set('fill','');
+      else active.set('fill',color);
+      canvas.requestRenderAll();
+    }
+
+    // ===== Tags =====
+    function insertTag(tag) {
+      if(!tag) return;
+      const active = canvas.getActiveObject();
+      if(active && active.type==='i-text') {
+        const start = active.selectionStart||0;
+        const end = active.selectionEnd||0;
+        const text = active.text;
+        active.text = text.slice(0,start)+tag+text.slice(end);
+        canvas.requestRenderAll();
+      } else {
+        const text = new fabric.IText(tag, {left:100, top:100, fontSize:24, fill:'#000'});
+        canvas.add(text);
+      }
+      document.getElementById('tagSelector').value='';
+    }
+  </script>
+</body>
+</html>
