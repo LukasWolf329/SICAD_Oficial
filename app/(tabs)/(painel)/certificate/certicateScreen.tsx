@@ -268,32 +268,6 @@ import { Picker } from '@react-native-picker/picker';
 export default function Certificate() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50 dark:bg-black">
-      <NavBar />
-      
-      <SideBar>
-        <SideBarCategory
-          titulo="Gestão"
-          itens={[
-            { nome: "Inicio", icone: "home-outline", link: "/profile/page-org" },
-            { nome: "Pessoas", icone: "people", link: "/peoples" },
-            { nome: "Vendas", icone: "cash", link: "/config" }
-          ]}
-        />
-        <SideBarCategory
-          titulo="Pos-Evento"
-          itens={[
-            { nome: "Certificados", icone: "map", link: "../certificate" },
-          ]}
-        />
-        <SideBarCategory
-          titulo="Geral"
-          itens={[
-            { nome: "Configuração", icone: "settings-outline", link: "../../index.tsx" },
-            { nome: "Ferramentas", icone: "hammer-outline", link: "../../index.tsx" }                    
-          ]}
-        />
-      </SideBar>
-
       <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
         <CertificateEditor />
       </Mainframe>

@@ -5,67 +5,60 @@ import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-nativ
 import { Feather, Ionicons } from '@expo/vector-icons';
 
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
-import { CertifyBox, InfoBox, PeopleBox } from "@/components/InfoBox";
+import { CertifyBox, InfoBox, ParticipantCertifyBox, PeopleBox } from "@/components/InfoBox";
+import { router } from "expo-router";
 
-export default function Certicate() {
+export default function SendCerticate() {
   return (
     <ScrollView className="flex-1 bg-slate-50 dark:bg-black">
-        <NavBar></NavBar>
-        
-        <SideBar>
-            <SideBarCategory
-                titulo="Gestão"
-                itens={[
-                    { nome: "Inicio", icone: "home-outline", link: "/profile/page-org" },
-                    { nome: "Pessoas", icone: "people", link: "/peoples" },
-                    { nome: "Vendas", icone: "cash", link: "/config" }
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Pos-Evento"
-                itens={[
-                    { nome: "Certificados", icone: "map", link: "../certificate" },
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Geral"
-                itens={[
-                    { nome: "Configuração", icone: "settings-outline", link: "../../index.tsx" },
-                    { nome: "Ferramentas", icone: "hammer-outline", link: "../../index.tsx" }                    
-                ]}
-            ></SideBarCategory>
-        </SideBar>
-
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
-            <View className="px-8">
-              <Text className="text-2xl">Certificados</Text>
-                <View className="flex-row items-center justify-between my-2">
-                    <View className="flex-row items-center gap-2 mt-2">
-                        <Pressable onPress={require("../certificate/index")} className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="add" size={22}/>Criar</Pressable>
-                        <Pressable onPress={require("../certificate/send")} className="w-min text-nowrap px-2 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="mail-outline" size={22}/>Envio por E-mail</Pressable>
-                        <Pressable onPress={require("../certificate/settings")} className="w-min px-2 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="settings-outline" size={22}/>Configurações</Pressable>
-                    </View>
+          <View className="px-8">
+            <Text className="text-2xl dark:color-white">Certificados</Text>
+              <View className="flex-row items-center justify-between my-2">
+                  <View className="flex-row items-center gap-2 mt-2">
+                      <Pressable
+                        onPress={() => router.push("./page")} // <- chama a rota como função
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="add" size={22} />
+                        <Text>Criar</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => router.push("./send")}
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="mail-outline" size={22} />
+                        <Text className="text-nowrap">Envio por E-mail</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => router.push("./settings")}
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="settings-outline" size={22} />
+                        <Text>Configurações</Text>
+                      </Pressable>
                   </View>
-                <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-2">
-                  <Text className="text-2xl">Criar Certificados</Text>
-                  <Pressable className="w-min text-nowrap color-white bg-[#2192ff] rounded-lg justify-center items-center p-1 mt-2">Adicionar Certificado</Pressable>
                 </View>
-                <View className='flex-row justify-between items-center border-b border-slate-300 px-4'>
-                  <Text className='font-semibold color-slate-400'>TITULO                           </Text>
-                  <Text className='font-semibold color-slate-400'>VALOR</Text>
-                  <Text className='font-semibold color-slate-400'>MODELO</Text>
-                  <Text className='font-semibold color-slate-400'>ATRIBUIÇÃO</Text>
-                  <Text className='font-semibold color-slate-400'>STATUS</Text>
-                  <Text className='font-semibold color-slate-400'>OPÇÕES</Text>
+              <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-2">
+                <Text className="text-2xl dark:color-white">Enviar Certificados</Text>  
+                <View className="flex-row mt-2 gap-2">
+                  <TextInput placeholder="Buscar" className="w-min bg-transparent border border-slate-400 rounded-lg px-2 py-1 color-slate-500 dark:color-white"/>
+                  <Pressable className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white">Exportar</Pressable>
+                  <Pressable className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white text-nowrap">Enviar para todos</Pressable>
                 </View>
-                <CertifyBox titulo="Certificado de Participação" valor="0" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="MiniCurso Web" valor="9.99" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="Semana de 115 anos" valor="13.00" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-            </View>
+              </View>
+              <View className='flex-row justify-center items-center border-b border-slate-300 px-4'>
+                <Text className='w-5/12 font-semibold color-slate-400'>PARTICIPANTE</Text>
+                <Text className='w-4/12 font-semibold color-slate-400'>E-MAIL</Text>
+                <Text className='w-2/12 font-semibold color-slate-400'>STATUS</Text>
+                <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
+              </View>
+              <ParticipantCertifyBox participante="Lorenzo Jordani Bertozzi Luz" email="lorenzobertozzi847@gmail.com" status={0}></ParticipantCertifyBox>
+              <ParticipantCertifyBox participante="Lukas Julius Wolf" email="lukasjuliuswolf@gmail.com" status={1}></ParticipantCertifyBox>
+          </View>
         </Mainframe>
-
-        
-
     </ScrollView>
   );
 }

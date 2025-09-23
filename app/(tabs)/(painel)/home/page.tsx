@@ -7,34 +7,9 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { InfoBox } from "@/components/InfoBox";
 
-export default function Profile() {
+export default function HomePage() {
   return (
-    <ScrollView className="flex-1 bg-   -50 dark:bg-black">
-        <NavBar></NavBar>
-        
-        <SideBar>
-            <SideBarCategory
-                titulo="Gestão"
-                itens={[
-                    { nome: "Inicio", icone: "home-outline", link: "" },
-                    { nome: "Pessoas", icone: "people", link: "/peoples" },
-                    //{ nome: "Vendas", icone: "cash", link: "/config" }
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Pós-Evento"
-                itens={[
-                    { nome: "Certificados", icone: "map", link: "../certificate" },
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Geral"
-                itens={[
-                    { nome: "Configuração", icone: "settings-outline", link: "../../index.tsx" },
-                    { nome: "Ferramentas", icone: "hammer-outline", link: "../../index.tsx" }                    
-                ]}
-            ></SideBarCategory>
-        </SideBar>
+    <ScrollView className="flex-1 dark:bg-[#121212]">
 
         <Mainframe name="Nome do Evento" photoUrl="user.png" link="www.evento.com">
             <View className="flex-row justify-center gap-4">
@@ -52,7 +27,7 @@ export default function Profile() {
                         <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                     </View>
                     <View>
-                        <Pressable className="border rounded-xl px-4 py-2 w-min text-xl">Acesse</Pressable>
+                        <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
                     </View>
                 </View>
                 <View className="flex-row justify-between items-center mb-8">
@@ -61,7 +36,7 @@ export default function Profile() {
                         <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                     </View>
                     <View>
-                        <Pressable className="border rounded-xl px-4 py-2 w-min text-xl">Acesse</Pressable>
+                        <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
                     </View>
                 </View>
                 <View className="flex-row justify-between items-center mb-8">
@@ -70,7 +45,7 @@ export default function Profile() {
                         <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                     </View>
                     <View>
-                        <Pressable className="border rounded-xl px-4 py-2 w-min text-xl">Acesse</Pressable>
+                        <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
                     </View>
                 </View>
                 <View className="flex-row justify-between items-center mb-8">
@@ -79,7 +54,7 @@ export default function Profile() {
                         <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                     </View>
                     <View>
-                        <Pressable className="border rounded-xl px-4 py-2 w-min text-xl">Acesse</Pressable>
+                        <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
                     </View>
                 </View>
             </View>

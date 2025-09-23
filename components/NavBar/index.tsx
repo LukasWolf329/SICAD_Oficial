@@ -1,8 +1,7 @@
 import Ionicons from '@expo/vector-icons/build/Ionicons';
-import { Link, Redirect, router } from 'expo-router';
+import {router } from 'expo-router';
 import React, { useState } from 'react';
-import { Linking ,Dimensions, Image, Pressable, Text, TextInput, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Linking ,Dimensions, Image, Pressable, Text, View } from 'react-native';
 
 interface InputProps {  
   label : string;
@@ -32,11 +31,41 @@ export function NavBar(){
   );
 }
 
-export function SideBar({children}: {children?: React.ReactNode}){
+
+export function SideBar({ children }: { children?: React.ReactNode }) {
+  const screenWidth = Dimensions.get("window").width;
+  const isSmall = screenWidth < 768;
+  const [isOpen, setIsOpen] = React.useState(!isSmall);
+
+  React.useEffect(() => {
+    setIsOpen(!isSmall); // reabre sidebar em desktop
+  }, [screenWidth]);
+
   return (
-    <View className='p-4 w-3/12' style={{position: 'absolute', left: 0, top: 100, zIndex: 10}}  >
-      {children}
-    </View>
+    <>
+      {/* Botão Hamburger apenas em telas pequenas */}
+      {isSmall && (
+        <Pressable
+          onPress={() => setIsOpen(!isOpen)}
+          className="absolute top-4 left-4 z-20 p-2 bg-[#059212] rounded"
+        >
+          <Ionicons name={isOpen ? "close" : "menu"} size={28} color="white" />
+        </Pressable>
+      )}
+
+      {/* Sidebar */}
+      {isOpen && (
+        <View
+          className={`h-full p-4 ${
+            isSmall
+              ? "absolute left-0 top-0 w-[70%] z-10 shadow-lg"
+              : "w-[250px]"
+          }`}
+        >
+          {children}
+        </View>
+      )}
+    </>
   );
 }
 
@@ -62,7 +91,7 @@ export function SideBarCategory({ titulo, itens }: SideBarCategoryProps) {
           <Pressable
             key={idx}
             className='flex-row items-center mb-4 mx-4 color-slate-500 hover:color-white'
-            onPress={() => router.push(item.link)}
+            onPress={() => router.push(item.link as any)}
           >
             <Text className="text-2xl ml-1 color-slate-400 hover:color-black dark:hover:color-white">
             <Ionicons name={item.icone} size={24} className='mr-2' />
@@ -79,11 +108,11 @@ export function Mainframe({children, name, photoUrl, link}: {children?: React.Re
   const screenHeight = Dimensions.get('window').height;
   const screenWidth = Dimensions.get('window').width;
   return (
-    <View className='bg-white dark:bg-gray-950 p-4 pb-20 self-end' style={{alignSelf: 'flex-end', borderBottomLeftRadius: 20 , width: '80%'}}>
+    <View className="bg-white dark:bg-[#242424] p-4 pb-20">
       <View className='flex-row m-8 items-center'>
         <Image source={require('../../assets/images/user.png')} style={{width:80, height:80}} className='rounded-full'/>
         <View>
-          <Text className='text-2xl mx-4 font-semibold'>{name}</Text>
+          <Text className='text-2xl mx-4 font-semibold dark:color-[#e0e0e0]'>{name}</Text>
           {link != null &&(
             <Pressable onPress={() => Linking.openURL(`https://${link}`)}>
               <Text className='text-sky-500 mx-4 font-semibold'>{link}</Text>

@@ -5,68 +5,85 @@ import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-nativ
 import { Feather, Ionicons } from '@expo/vector-icons';
 
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
-import { CertifyBox, InfoBox, PeopleBox } from "@/components/InfoBox";
+import { CertifyBox, InfoBox, ParticipantCertifyBox, PeopleBox } from "@/components/InfoBox";
 import { router } from "expo-router";
+import { CheckBox } from "react-native-web";
 
-export default function Certicate() {
+export default function SendCerticate() {
   return (
     <ScrollView className="flex-1 bg-slate-50 dark:bg-black">
-        <NavBar></NavBar>
-        
-        <SideBar>
-            <SideBarCategory
-                titulo="Gestão"
-                itens={[
-                    { nome: "Inicio", icone: "home-outline", link: "/profile/page-org" },
-                    { nome: "Pessoas", icone: "people", link: "/peoples" },
-                    { nome: "Vendas", icone: "cash", link: "/config" }
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Pos-Evento"
-                itens={[
-                    { nome: "Certificados", icone: "map", link: "../certificate" },
-                ]}
-            ></SideBarCategory>
-            <SideBarCategory
-                titulo="Geral"
-                itens={[
-                    { nome: "Configuração", icone: "settings-outline", link: "../../index.tsx" },
-                    { nome: "Ferramentas", icone: "hammer-outline", link: "../../index.tsx" }                    
-                ]}
-            ></SideBarCategory>
-        </SideBar>
-
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
-            <View className="px-8">
-              <Text className="text-2xl">Certificados</Text>
-                <View className="flex-row items-center justify-between my-2">
+          <View className="px-8">
+            <Text className="text-2xl dark:color-white">Certificados</Text>
+              <View className="flex-row items-center justify-between my-2">
                   <View className="flex-row items-center gap-2 mt-2">
-                      <Pressable onPress={() => router.push("../certificate")} className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="add" size={22}/>Criar</Pressable>
-                      <Pressable onPress={() => router.push("../certificate-send")} className="w-min text-nowrap px-2 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="mail-outline" size={22}/>Envio por E-mail</Pressable>
-                      <Pressable onPress={() => router.push("../certificate-settings")} className="w-min px-2 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="settings-outline" size={22}/>Configurações</Pressable>
+                      <Pressable
+                        onPress={() => router.push("./page")} // <- chama a rota como função
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="add" size={22} />
+                        <Text>Criar</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => router.push("./send")}
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="mail-outline" size={22} />
+                        <Text className="text-nowrap">Envio por E-mail</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => router.push("./settings")}
+                        className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+                      >
+                        <Ionicons name="settings-outline" size={22} />
+                        <Text>Configurações</Text>
+                      </Pressable>
                   </View>
                 </View>
-                <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-2">
-                  <Text className="text-2xl">Criar Certificados</Text>
-                  <Pressable className="w-min text-nowrap color-white bg-[#2192ff] rounded-lg justify-center items-center p-1 mt-2">Adicionar Certificado</Pressable>
+              <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-4">
+                <Text className="text-2xl dark:color-white">Configurações</Text>  
+              </View>
+              <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-4">
+                <View>
+                  <Text className="text-lg font-semibold dark:color-white">Comunicação</Text>
+                  <Text className="dark:color-white">Edite o conteudo do email que o particiamnete vcai receber ao ser enviado o Certificado</Text>  
                 </View>
-                <View className='flex-row justify-between items-center border-b border-slate-300 px-4'>
-                  <Text className='font-semibold color-slate-400'>TITULO                           </Text>
-                  <Text className='font-semibold color-slate-400'>VALOR</Text>
-                  <Text className='font-semibold color-slate-400'>MODELO</Text>
-                  <Text className='font-semibold color-slate-400'>ATRIBUIÇÃO</Text>
-                  <Text className='font-semibold color-slate-400'>STATUS</Text>
-                  <Text className='font-semibold color-slate-400'>OPÇÕES</Text>
+                <View>
+                  <Pressable className="w-min border border-slate-400 items-center justify-center rounded-lg px-2 py-1 dark:color-white text-nowrap flex-row gap-2"><Ionicons name="mail-outline" size={22} className="dark:color-white"/> Editar E-mail</Pressable>
                 </View>
-                <CertifyBox titulo="Certificado de Participação" valor="0" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="MiniCurso Web" valor="9.99" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="Semana de 115 anos" valor="13.00" modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-            </View>
+              </View>
+              <View className="flex-row items-center justify-between mt-4 border-slate-300 pb-4">
+                <View>
+                  <Text className="text-lg font-semibold dark:color-white">Formato da Publicação</Text>
+                  <Text className="dark:color-white">Defina como os certificados são ser liberados</Text>  
+                </View>
+                
+              </View>
+              <View className="flex-row gap-2 mb-8">
+                <View>                  
+                  <CheckBox value={true} />
+                </View>
+                <View>                  
+                  <Text className="dark:color-white font-semibold">Publicar Automaticamente</Text>
+                  <Text className="dark:color-white">Os certidicado seçao liberado automaticamente 7 dias apos o evento</Text>
+                </View>
+              </View>
+              <View className="flex-row gap-2 mb-8">
+                <View>                  
+                  <CheckBox value={false} />
+                </View>
+                <View>                  
+                  <Text className="dark:color-white font-semibold">Publicar Manualmente</Text>
+                  <Text className="dark:color-white">Voce precisa publicar manualmente para os certificadosficarem disponiveis</Text>
+                </View>
+              </View>
+              <View>
+                <Pressable className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white text-nowrap">Salvar Configurações</Pressable>
+              </View>
+          </View>
         </Mainframe>
-
-        
-
     </ScrollView>
   );
 }

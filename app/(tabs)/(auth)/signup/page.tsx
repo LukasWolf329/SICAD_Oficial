@@ -1,3 +1,4 @@
+import { navigate } from "expo-router/build/global-state/routing";
 import "../../../../style/global.css";
 
 import { Link } from "expo-router";
@@ -14,14 +15,15 @@ export default function Signup() {
 
     function handleSignUp() {
         console.log('Criar conta com:', { nome, email, senha, c_senha });
+        navigate('/(tabs)/(painel)/home/page'); // Redireciona para a página de perfil após o login
     }
 
     return (
-        <View className="flex-1 flex-row">
+        <View className="flex-1 flex-row bg-white dark:bg-[#121212] ">
             <View id="aside" className="w-5/12">
                 <Image source={require('../../../../assets/images/side-view-login-cadastro.png')}/>
             </View>
-            <View className="bg-white dark:bg-black flex-1 items-center justify-center">
+            <View className="flex-1 items-center justify-center">
                 <View>
                     <Image source={require('../../../../assets/images/logo-composta.png')} className="mb-4" />
                     <Text className="text-6xl dark:color-white">Crie sua conta</Text>
