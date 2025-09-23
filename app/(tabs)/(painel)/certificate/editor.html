@@ -5,30 +5,91 @@
   <title>Editor de Certificados</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
-    body { display: flex; gap: 20px; font-family: Arial, sans-serif; }
-    canvas { border: 1px solid #ccc; display: block; margin-bottom: 15px; }
-    #toolbar { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 10px; }
-    #templates { display: flex; gap: 10px; margin-top: 10px; }
+    body {
+      display: flex;
+      gap: 20px;
+      font-family: Arial, sans-serif;
+      align-items: flex-start;
+      margin: 0;
+      padding: 10px;
+    }
+
+    canvas {
+      border: 1px solid #ccc;
+      display: block;
+      margin-top: 15px;
+    }
+
+    #toolbar {
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* Painel lateral ESQUERDO */
+    #shapesPanel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-width: 150px;
+    }
+
+    #shapesPanel button {
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    /* Painel lateral DIREITO (templates) */
+    #templatesPanel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-width: 160px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    #templates {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     #templates img {
-      width: 120px; height: auto; border: 2px solid #ccc;
-      cursor: pointer; border-radius: 6px;
+      width: 100%;
+      border: 2px solid #ccc;
+      cursor: pointer;
+      border-radius: 6px;
       transition: transform 0.2s, border-color 0.2s;
     }
-    #templates img:hover { transform: scale(1.05); border-color: #666; }
-    #shapesPanel { display: flex; flex-direction: column; gap: 8px;
-      padding: 10px; border: 1px solid #ddd; border-radius: 6px; max-width: 150px;
+
+    #templates img:hover {
+      transform: scale(1.05);
+      border-color: #666;
     }
-    #shapesPanel button { padding: 6px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <!-- Painel lateral com formas -->
+  <!-- Painel lateral ESQUERDO -->
   <div id="shapesPanel">
     <h4>Formas</h4>
-    <button onclick="addShape('rect')">Quadrado</button>
-    <button onclick="addShape('circle')">Círculo</button>
-    <button onclick="addShape('triangle')">Triângulo</button>
-
+    <button onclick="addShape('rect')" title="Quadrado">
+      <i class="fas fa-square"></i> Quadrado
+    </button>
+    <button onclick="addShape('circle')" title="Círculo">
+      <i class="fas fa-circle"></i> Círculo
+    </button>
+    <button onclick="addShape('triangle')" title="Triângulo">
+      <i class="fas fa-play fa-rotate-270"></i> Triângulo
+    </button>
+    
     <h4>Linhas</h4>
     <button onclick="addLine('normal')">Linha</button>
     <button onclick="addLine('dashed')">Linha Tracejada</button>
@@ -53,7 +114,7 @@
   </div>
 
   <!-- Área principal -->
-  <div style="flex:1">
+  <div style="flex: 1; display: flex; flex-direction: column;">
     <div id="toolbar">
       <button onclick="addText()">Adicionar Texto</button>
 
@@ -95,18 +156,28 @@
       <!-- Upload de imagem -->
       <input type="file" id="imgLoader">
 
+      <!-- Camadas -->
+      <button onclick="bringToFront()">Trazer para Frente</button>
+      <button onclick="sendToBack()">Enviar para Trás</button>
+
+      <!-- Apagar -->
+      <button onclick="deleteSelected()">Excluir Selecionado</button>
+
       <!-- Download -->
       <button onclick="download()">Baixar</button>
     </div>
 
     <canvas id="c" width="800" height="600"></canvas>
+  </div>
 
-    <!-- Galeria de Templates -->
+  <!-- Painel lateral DIREITO -->
+  <div id="templatesPanel">
+    <h4>Modelos</h4>
     <div id="templates">
-      <img src="assets/images/certificados/certificado1.png" alt="Template 1" onclick="setTemplate(this.src)">
-      <img src="assets/images/certificados/certificado2.png" alt="Template 2" onclick="setTemplate(this.src)">
-      <img src="assets/images/certificados/certificado3.png" alt="Template 3" onclick="setTemplate(this.src)">
-      <img src="assets/images/certificados/certificado4.png" alt="Template 4" onclick="setTemplate(this.src)">
+      <img src="../../../../assets/certificados/Certificado (1).png" alt="Template 1" onclick="setTemplate(this.src)">
+      <img src="../../../../assets/certificados/Certificado (2).png" alt="Template 2" onclick="setTemplate(this.src)">
+      <img src="../../../../assets/certificados/Certificado (3).png" alt="Template 3" onclick="setTemplate(this.src)">
+      <img src="../../../../assets/certificados/Certificado (4).png" alt="Template 4" onclick="setTemplate(this.src)">
     </div>
   </div>
 
@@ -199,6 +270,33 @@
       canvas.setActiveObject(line);
     }
 
+    // ===== Camadas =====
+    function bringToFront() {
+      const active = canvas.getActiveObject();
+      if (active) {
+        active.bringToFront();
+        canvas.requestRenderAll();
+      }
+    }
+
+    function sendToBack() {
+      const active = canvas.getActiveObject();
+      if (active) {
+        active.sendToBack();
+        canvas.requestRenderAll();
+      }
+    }
+
+    // ===== Apagar =====
+    function deleteSelected() {
+      const active = canvas.getActiveObject();
+      if (active) {
+        canvas.remove(active);
+        canvas.requestRenderAll();
+      }
+    }
+
+    // ===== Cor e Preenchimento =====
     function updateShapeColor(color) {
       const active = canvas.getActiveObject();
       if(!active) return;

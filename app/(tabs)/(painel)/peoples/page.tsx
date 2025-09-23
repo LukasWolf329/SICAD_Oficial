@@ -9,7 +9,7 @@ import { InfoBox, PeopleBox } from "@/components/InfoBox";
 
 export default function Profile() {
   return (
-    <ScrollView className="flex-1 bg-slate-50 dark:bg-[#121212]">
+    <ScrollView className="flex-1 dark:bg-[#121212]">
 
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
             <View className="px-8">

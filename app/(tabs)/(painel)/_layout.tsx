@@ -9,7 +9,8 @@ export default function AppLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <View className="flex-1 bg-[#f5f5f5] dark:bg-[#121212]">
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <View className="flex-1 dark:bg-[#121212]">
         <NavBar />
         <View className="flex-1 flex-row">
           <SideBar>
@@ -30,7 +31,7 @@ export default function AppLayout() {
             <SideBarCategory
               titulo="Geral"
               itens={[
-                { nome: "Configuração", icone: "settings-outline", link: "/(app)/config" },
+                { nome: "Configuração", icone: "settings-outline", link: "../settings/page" },
               ]}
             />
           </SideBar>

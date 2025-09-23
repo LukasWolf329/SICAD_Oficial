@@ -11,7 +11,7 @@ import { CheckBox } from "react-native-web";
 
 export default function SendCerticate() {
   return (
-    <ScrollView className="flex-1 bg-slate-50 dark:bg-black">
+    <ScrollView className="flex-1  dark:bg-black">
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
           <View className="px-8">
             <Text className="text-2xl dark:color-white">Certificados</Text>

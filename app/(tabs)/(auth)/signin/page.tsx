@@ -18,7 +18,7 @@ export default function Login() {
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
       <View id="aside" className=" w-5/12"> 
-        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} className="h-full mobile:h-0 mobile:w-0 mobile:hidden"/>
+        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden"/>
       </View>
       <View className="flex-1 items-center justify-center">
         <View>
