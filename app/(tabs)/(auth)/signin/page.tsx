@@ -4,6 +4,7 @@ import "../../../../style/global.css";
 import { Link } from "expo-router";
 import React from 'react';
 import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
+import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -11,9 +12,48 @@ export default function Login() {
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
 
+  const [alertVisible, setAlertVisible] = React.useState(false);
+  const [alertMessage, setAlertMessage] = React.useState("");
+  const [alertTitle, setAlertTitle] = React.useState("Ocorreu um erro");
+
+
+  function showError(message: string, title = "Ocorreu um erro") {
+  setAlertTitle(title);
+  setAlertMessage(message);
+  setAlertVisible(true);
+}
+
   function handleSignIn() {
     console.log('Login com:', { email, senha });
-    navigate('/(tabs)/(painel)/home/page'); // Redireciona para a página de perfil após o login
+    // Redireciona para a página de perfil após o login
+    if (!email || !senha) {
+      showError('Por favor, preencha todos os campos');
+      return;
+    }
+    fetch("http://192.168.1.106/SICAD/login.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+
+        email: email,
+        senha: senha,
+
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Resposta do backend:", data);
+        if (data.success) {
+          navigate('/(tabs)/(painel)/home/page');
+        } else {
+          showError(data.message || "Verifique suas credenciais e tente novamente.");
+        }
+      })
+      .catch((error) => {
+        console.error("Erro na requisição:", error);
+      });
   }
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
@@ -47,6 +87,15 @@ export default function Login() {
           <Link href={'/(tabs)/(auth)/signup/page'} className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Link>
         </View>
       </View>
+      <NiceAlert
+      visible={alertVisible}
+      title={alertTitle}
+      message={alertMessage}
+      onClose={() => setAlertVisible(false)}
+    />
     </View>
   );
 }
+
+
+//navigate('/(tabs)/(painel)/home/page');

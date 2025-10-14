@@ -1,13 +1,26 @@
 import "../../../../style/global.css";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { InfoBox, PeopleBox } from "@/components/InfoBox";
 
+type Pessoa = {
+  nome: string;
+  email: string;
+};
+
 export default function Profile() {
+    const[pessoas, setPessoas] = useState<Pessoa[]>([]);
+    useEffect(() => {
+        fetch("http://192.168.1.106/SICAD/people.php")
+        .then((res) => res.json())
+        .then((data) => setPessoas(data))
+        .catch((err) => console.error("Erro ao carregar pessoas:", err))
+    }, [])
+
   return (
     <ScrollView className="flex-1 dark:bg-[#121212]">
 
@@ -25,15 +38,15 @@ export default function Profile() {
                     <TextInput placeholder="Buscar Por Nome ou E-mail..." className="flex-1 bg-transparent color-slate-500 dark:color-white text-lg"/>
                     <Ionicons name="search" size={22} className="color-slate-700 mr-2 dark:color-white" />
                 </View>
-                <View className="flex-row flex-wrap gap-4">
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
-                    <PeopleBox photo="user.png" name="Nome da pessoa" email="nome@mail.com"></PeopleBox>
+                <View className="flex-row flex-wrap gap-4 mt-4">
+                    {pessoas.map((pessoa, index) => 
+                        <PeopleBox
+                            key={index}
+                            photo="user.png"
+                            name={pessoa.nome}
+                            email={pessoa.email}
+                        />
+                    )}
                 </View>
             </View>
         </Mainframe>

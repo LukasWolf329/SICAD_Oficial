@@ -1,6 +1,6 @@
 import "../../../../style/global.css";
 
-import React from 'react';
+import React, { useEffect, useState } from "react";
 import { Text, View, Image, ScrollView, Pressable } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 
@@ -8,14 +8,28 @@ import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../compone
 import { InfoBox } from "@/components/InfoBox";
 
 export default function HomePage() {
+    const [totalInscritos, setTotalInscritos] = useState<number>(0);
+    const [atividadesCadastradas, setAtividadesCadastradas] = useState<number>(0);
+    const [totalCertificados, setTotalCertificados] = useState<number>(0);
+
+    useEffect(() => {
+        fetch("http://192.168.1.106/SICAD/page-org.php")
+            .then((res) => res.json())
+            .then((json) => {
+                setTotalInscritos(json.total_participantes);
+                setAtividadesCadastradas(json.atividades_cadastradas);
+                setTotalCertificados(json.total_certificados);
+            })
+            .catch((err) => console.error("Erro ao buscar os dados:", err))
+    }, []);
   return (
     <ScrollView className="flex-1 dark:bg-[#121212]">
 
         <Mainframe name="Nome do Evento" photoUrl="user.png" link="www.evento.com">
             <View className="flex-row justify-center gap-4">
-                <InfoBox name="Total de Inscritos" icon="people" counter="200"></InfoBox>
-                <InfoBox name="Certificados Emitidos" icon="card-outline" counter="143"></InfoBox>
-                <InfoBox name="Total de Inscritos" icon="book-outline" counter="200"></InfoBox>
+                <InfoBox name="Total de Inscritos" icon="people" counter={totalInscritos.toString()}></InfoBox>
+                <InfoBox name="Certificados Emitidos" icon="card-outline" counter={totalCertificados.toString()}></InfoBox>
+                <InfoBox name="Total de Inscritos" icon="book-outline" counter={atividadesCadastradas.toString()}></InfoBox>
             </View>
 
 

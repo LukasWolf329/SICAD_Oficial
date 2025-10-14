@@ -1,6 +1,6 @@
 import "../../../../style/global.css";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-native';
 import { router } from "expo-router";
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,19 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { CertifyBox, InfoBox, PeopleBox } from "@/components/InfoBox";
 
+type Certificado = {
+  titulo: string;
+}
+
 export default function Certicate() {
+  const[certificados, setCertificados] = useState<Certificado[]>([]);
+  useEffect(() => {
+    fetch("http://192.168.1.106/SICAD/certificado.php")
+    .then((res) => res.json())
+    .then((data) => setCertificados(data))
+    .catch((err) => console.error("Erro ao carregar certificados:", err))
+  }, [])
+
   return (
     <ScrollView className="flex-1 dark:bg-black">
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
@@ -53,9 +65,19 @@ export default function Certicate() {
                   <Text className='w-2/12 font-semibold color-slate-400'>STATUS</Text>
                   <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
                 </View>
-                <CertifyBox titulo="Certificado de Participação" valor={0} modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="MiniCurso Web" valor={9.99} modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
-                <CertifyBox titulo="Semana de 115 anos" valor={13.00} modelo="Padrão" att="Automática" status="Ativo"></CertifyBox>
+                <View>
+                  {certificados.map((certificado, index) =>
+                    <CertifyBox
+                      key={index}
+                      titulo = {certificado.titulo}
+                      valor = {0}
+                      modelo={"Padrão"}
+                      att = {"Automática"}
+                      status={"Ativo"}
+                    />
+                  )}
+                </View>
+                
             </View>
         </Mainframe>
     </ScrollView>

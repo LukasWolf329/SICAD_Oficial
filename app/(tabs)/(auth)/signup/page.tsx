@@ -15,8 +15,34 @@ export default function Signup() {
     const [c_senha, setCSenha] = React.useState('');
 
     function handleSignUp() {
-        console.log('Criar conta com:', { nome, email, senha, c_senha });
-        navigate('/(tabs)/(painel)/home/page'); // Redireciona para a página de perfil após o login
+        if (!nome || !email || !senha || !c_senha) {
+            alert('Por favor, preencha todos os campos');
+            return;
+        }
+        if (senha !== c_senha) {
+            alert('As senhas não coincidem');
+            return;
+        }
+        fetch("http://192.168.1.100/SICAD/cadastro.php", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                nome: nome,
+                email: email,
+                senha: senha,
+                c_senha: c_senha
+            }),
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                console.log("Resposta do backend:", data);
+            })
+            .catch((error) => {
+                console.error("Erro na requisição:", error);
+            });
+            navigate('/(tabs)/(auth)/signin/page'); // Redireciona para a página de perfil após o login
     }
 
     return (
@@ -63,3 +89,6 @@ export default function Signup() {
         </View>
     );
 }
+
+
+//navigate('/(tabs)/(painel)/home/page'); 
