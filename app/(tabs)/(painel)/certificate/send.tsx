@@ -1,6 +1,6 @@
 import "../../../../style/global.css";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 
@@ -8,7 +8,21 @@ import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../compone
 import { CertifyBox, InfoBox, ParticipantCertifyBox, PeopleBox } from "@/components/InfoBox";
 import { router } from "expo-router";
 
+type Certificado = {
+  participante: string;
+  email: string;
+  status: number; 
+};
+
 export default function SendCerticate() {
+  const [certificados, setCertificados] = useState<Certificado[]>([]);
+  useEffect(() => {
+    fetch("http://192.168.1.106/SICAD/get_certificados.php")
+    .then((res) => res.json())
+    .then((data) => setCertificados(data))
+    .catch((err) => console.error("Erro ao carregar os certificados: ", err))
+  }, []);
+
   return (
     <ScrollView className="flex-1 dark:bg-black">
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
@@ -55,8 +69,16 @@ export default function SendCerticate() {
                 <Text className='w-2/12 font-semibold color-slate-400'>STATUS</Text>
                 <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
               </View>
-              <ParticipantCertifyBox participante="Lorenzo Jordani Bertozzi Luz" email="lorenzobertozzi847@gmail.com" status={0}></ParticipantCertifyBox>
-              <ParticipantCertifyBox participante="Lukas Julius Wolf" email="lukasjuliuswolf@gmail.com" status={1}></ParticipantCertifyBox>
+              <View>
+                {certificados.map((certificado, index) => 
+                  <ParticipantCertifyBox
+                    key={index}
+                    participante={certificado.participante}
+                    email={certificado.email}
+                    status={certificado.status}
+                  />
+                )}
+              </View>
           </View>
         </Mainframe>
     </ScrollView>
