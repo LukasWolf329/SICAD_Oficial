@@ -42,7 +42,9 @@ export default function Signup() {
             .catch((error) => {
                 console.error("Erro na requisição:", error);
             });
-            navigate('/(tabs)/(auth)/signin/page'); // Redireciona para a página de perfil após o login
+            if(nome && email && senha && c_senha){
+                navigate('/(tabs)/(painel)/home/page'); // Redireciona para a página de perfil após o login
+            } 
     }
 
     return (

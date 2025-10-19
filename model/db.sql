@@ -339,7 +339,6 @@ SELECT DISTINCT
 FROM sicad.usuario   AS u
 JOIN sicad.gerencia  AS g ON u.ID = g.fk_Usuario_ID
 JOIN sicad.evento    AS e ON g.fk_Evento_codigo = e.codigo
-
 UNION
 SELECT DISTINCT
   u.ID    AS usuario_id,
