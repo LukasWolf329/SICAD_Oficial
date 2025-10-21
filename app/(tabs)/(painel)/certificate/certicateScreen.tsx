@@ -4,7 +4,7 @@ import { View } from "react-native-web";
 import { WebView } from "react-native-webview";
 
 export default function CertificateModify() {
-  const pageUrl = "http://127.0.0.1:5500/SICAD/app/(tabs)/(painel)/certificate/editor.html"; // arquivo na pasta public
+  const pageUrl = "http://127.0.0.1:5500/app/(tabs)/(painel)/certificate/editor.html"; // arquivo na pasta public
 
   return (
     <View>

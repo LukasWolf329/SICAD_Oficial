@@ -23,7 +23,7 @@ export default function Signup() {
             alert('As senhas não coincidem');
             return;
         }
-        fetch("http://192.168.1.100/SICAD/cadastro.php", {
+        fetch("http://192.168.1.106/SICAD/cadastro.php", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -43,7 +43,7 @@ export default function Signup() {
                 console.error("Erro na requisição:", error);
             });
             if(nome && email && senha && c_senha){
-                navigate('/(tabs)/(painel)/home/page'); // Redireciona para a página de perfil após o login
+                navigate('/(tabs)/(painel)/home/page'); 
             } 
     }
 

@@ -1,6 +1,6 @@
 <?php
 require("db.php");
-require("test_input.php");
+require("functions.php"); 
 
 session_start();
 
@@ -14,6 +14,7 @@ $data = json_decode(file_get_contents('php://input'), true);
 if (isset($data['email']) && isset($data['senha'])) {
     $email = test_input($data['email']);
     $senha = test_input($data['senha']);
+
 
     $stmt = $conn->prepare('SELECT ID, nome, email, senha FROM usuario WHERE email = ?');
     $stmt->bind_param('s', $email);
