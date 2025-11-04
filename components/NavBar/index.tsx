@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/build/Ionicons';
 import {router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking ,Dimensions, Image, Pressable, Text, View } from 'react-native';
 
 interface InputProps {  
@@ -9,7 +9,33 @@ interface InputProps {
   note?: string;
 }
 
-export function NavBar(){
+export function NavBar(){ // esta dando errado nao sei onde esta o erro
+  const [nomeUsuario, setnomeUsuario] = useState("");
+  useEffect(() => {
+    const fetchUsuario = async () => {
+      try {
+        const rest = await fetch("http://192.168.1.106/SICAD/get_usuario.php", {
+          method:"GET",
+          headers: {
+            "Content-Type": "application/json",
+          }, 
+          credentials: "include",
+        });
+        const data = await rest.json();
+        if(data.success) {
+          setnomeUsuario(data.nome);
+        }
+        else {
+          console.log("Usuario nao autenticado: ", data.message);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar o nome do usuario: ", err);
+      }
+    };
+
+    fetchUsuario();
+  }, []);
+
   return (
     <View className="flex-row justify-between items-center px-4 bg-[#059212]">
         <View className="p-2">
@@ -24,7 +50,7 @@ export function NavBar(){
             </View>
             <View className="flex-row items-center gap-4">
                 <Image source={require('../../assets/images/favicon.png')} style={{width: 40, height: 40}} className="rounded-full"/>
-                <Pressable className="color-white flex-row">Nome do ususario <Ionicons name="caret-down-outline" size={24} className="color-white"/></Pressable>
+                <Pressable className="color-white flex-row">Nome do usuario<Ionicons name="caret-down-outline" size={24} className="color-white"/></Pressable>
             </View>
         </View>
     </View>

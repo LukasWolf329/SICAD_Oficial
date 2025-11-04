@@ -11,6 +11,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 export default function Login() {
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
+  
 
   const [alertVisible, setAlertVisible] = React.useState(false);
   const [alertMessage, setAlertMessage] = React.useState("");
@@ -41,11 +42,13 @@ export default function Login() {
         senha: senha,
 
       }),
+      credentials:"include",
     })
       .then((response) => response.json())
       .then((data) => {
         console.log("Resposta do backend:", data);
         if (data.success) {
+          
           navigate('/(tabs)/(painel)/home/page');
         } else {
           showError(data.message || "Verifique suas credenciais e tente novamente.");

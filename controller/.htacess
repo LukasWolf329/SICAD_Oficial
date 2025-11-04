@@ -1,0 +1,13 @@
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "http://localhost:8081"
+    Header always set Access-Control-Allow-Credentials "true"
+    Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+<Limit OPTIONS>
+    Require all granted
+</Limit>
+
+# Evita erro 404 no preflight
+ErrorDocument 404 "Preflight handled by Apache"

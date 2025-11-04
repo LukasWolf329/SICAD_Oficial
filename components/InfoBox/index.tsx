@@ -123,6 +123,28 @@ export function ParticipantCertifyBox({
   email?: string;
   status?: number;
 }) {
+
+  const enviarCertificado = async () => {
+    try {
+      const response = await fetch("http://192.168.1.106/SICAD/enviar_certificado.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log(`Certificado enviado para ${email}`);
+      } else {
+        console.log("Erro:", data.message || "Falha ao enviar certificado.");
+      }
+    } catch (error) {
+      console.error("Erro ao enviar certificado:", error);
+    }
+  };
   return (
     <View className="flex-row border-b border-slate-300">
       {/* TITULO */}
@@ -150,7 +172,7 @@ export function ParticipantCertifyBox({
 
       {/* OPÇÕES */}
       <View className="w-2/12 p-2 flex-row gap-1 justify-center items-center">
-        <Pressable className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
+        <Pressable onPress={enviarCertificado} className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
           <Ionicons name="checkmark" size={16} className="color-slate-400" />
           <Text className="color-slate-400 ml-1">Publicar</Text>
         </Pressable>
