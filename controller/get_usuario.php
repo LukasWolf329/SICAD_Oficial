@@ -6,8 +6,8 @@ session_start();
 // ====== CONFIGURAÇÃO DE CORS ======
 $allowed_origins = [
     'http://localhost:8081',
-    'http://192.168.1.106:8081',
-    'http://192.168.1.106'
+    'http://192.168.1.104:8081',
+    'http://192.168.1.104'
 ];
 
 if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {

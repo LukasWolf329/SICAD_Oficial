@@ -4,11 +4,14 @@ import "../../../../style/global.css";
 import { Link } from "expo-router";
 import React from 'react';
 import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
-
+import { authCheck } from "@/app/authCheck/authCheck";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ScrollView } from "react-native-web";
 
 export default function Signup() {
+
+    authCheck();
+    
     const [nome, setNome] = React.useState('');
     const [email, setEmail] = React.useState('');
     const [senha, setSenha] = React.useState('');
@@ -23,7 +26,7 @@ export default function Signup() {
             alert('As senhas não coincidem');
             return;
         }
-        fetch("http://192.168.1.106/SICAD/cadastro.php", {
+        fetch("http://192.168.1.104/SICAD/cadastro.php", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

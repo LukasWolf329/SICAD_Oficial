@@ -13,7 +13,7 @@ export default function HomePage() {
     const [totalCertificados, setTotalCertificados] = useState<number>(0);
 
     useEffect(() => {
-        fetch("http://192.168.1.106/SICAD/page-org.php")
+        fetch("http://192.168.1.104/SICAD/page-org.php")
             .then((res) => res.json())
             .then((json) => {
                 setTotalInscritos(json.total_participantes);

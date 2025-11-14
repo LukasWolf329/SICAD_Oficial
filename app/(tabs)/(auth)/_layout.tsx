@@ -1,7 +1,10 @@
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { Stack } from 'expo-router';
+import { Stack, Slot, useRouter } from 'expo-router';
 import { View } from 'react-native';
+import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 
 export default function AuthLayout() {
   const colorScheme = useColorScheme();
@@ -14,3 +17,5 @@ export default function AuthLayout() {
     </ThemeProvider>
   );
 }
+
+

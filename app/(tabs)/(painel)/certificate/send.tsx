@@ -14,15 +14,30 @@ type Certificado = {
   status: number; 
 };
 
+
 export default function SendCerticate() {
   const [certificados, setCertificados] = useState<Certificado[]>([]);
   useEffect(() => {
-    fetch("http://192.168.1.106/SICAD/get_certificados.php")
+    fetch("http://192.168.1.104/SICAD/get_certificados.php")
     .then((res) => res.json())
     .then((data) => setCertificados(data))
     .catch((err) => console.error("Erro ao carregar os certificados: ", err))
   }, []);
 
+  const handleSendAll = () => {
+    fetch("http://192.168.1.104/SICAD/enviar_certificado_todos.php", {
+    method:"POST",
+    })
+
+    .then((res) => res.json())
+    .then((data) => {
+      console.log(data.message || "Envio Concluido");
+    })
+    .catch((err) => {
+      console.error("Erro ao enviar certificados: ", err);
+
+    });
+  };
   return (
     <ScrollView className="flex-1 dark:bg-black">
         <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
@@ -60,7 +75,7 @@ export default function SendCerticate() {
                 <View className="flex-row mt-2 gap-2">
                   <TextInput placeholder="Buscar" className="w-min bg-transparent border border-slate-400 rounded-lg px-2 py-1 color-slate-500 dark:color-white"/>
                   <Pressable className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white">Exportar</Pressable>
-                  <Pressable className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white text-nowrap">Enviar para todos</Pressable>
+                  <Pressable onPress={handleSendAll} className="w-min bg-[#2192ff] items-center justify-center rounded-lg px-2 py-1 color-white text-nowrap">Enviar para todos</Pressable>
                 </View>
               </View>
               <View className='flex-row justify-center items-center border-b border-slate-300 px-4'>

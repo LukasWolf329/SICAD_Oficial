@@ -24,9 +24,15 @@ $sql = "
       u.nome AS nome_usuario,
       u.email AS email_usuario,
       c.codigo AS codigo_certificado,
-      c.template AS pdf_blob
+      c.template AS pdf_blob,
+      e.nome AS nome_evento
   FROM Usuario u
-  INNER JOIN Certificado c ON c.fk_Usuario_ID = u.ID
+  INNER JOIN Certificado c 
+      ON c.fk_Usuario_ID = u.ID
+  INNER JOIN Atividade a
+      ON a.ID = c.fk_Atividade_ID
+  INNER JOIN Evento e
+      ON e.codigo = a.fk_Evento_codigo
   WHERE u.email = ?
   LIMIT 1
 ";
@@ -68,12 +74,13 @@ try {
   $mail->Password = 'khin fxqc ohye rewu'; // senha de app
   $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
   $mail->Port = 587;
+  $mail->CharSet = "UTF-8";
 
   // E-mail
   $mail->setFrom('lukasjuliuswolf@gmail.com', 'SICAD - Certificados');
   $mail->addAddress($dado['email_usuario'], $dado['nome_usuario']);
   $mail->Subject = 'Seu certificado está disponível!';
-  $mail->Body = "Olá {$dado['nome_usuario']},\n\nSegue em anexo o certificado referente à sua participação.\n\nAtenciosamente,\nEquipe SICAD";
+  $mail->Body = "Olá {$dado['nome_usuario']},\n\nSegue em anexo o certificado referente à sua participação no evento {$dado['nome_evento']}.\n\nAtenciosamente,\nEquipe SICAD";
   $mail->addAttachment($tempFilePath, "certificado.pdf");
 
   // Envia

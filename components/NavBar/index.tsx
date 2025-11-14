@@ -14,7 +14,7 @@ export function NavBar(){ // esta dando errado nao sei onde esta o erro
   useEffect(() => {
     const fetchUsuario = async () => {
       try {
-        const rest = await fetch("http://192.168.1.106/SICAD/get_usuario.php", {
+        const rest = await fetch("http://192.168.1.104/SICAD/get_usuario.php", {
           method:"GET",
           headers: {
             "Content-Type": "application/json",

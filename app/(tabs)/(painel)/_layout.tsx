@@ -1,11 +1,32 @@
-import { ThemeProvider, DarkTheme, DefaultTheme, Link } from '@react-navigation/native';
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { Stack } from 'expo-router';
+import { Stack, Slot, useRouter } from 'expo-router';
 import { NavBar, SideBar, SideBarCategory } from "@/components/NavBar";
 import { View } from 'react-native';
+import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function AppLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+
+  
+  useEffect(() => {
+    async function check() {
+      const token = await AsyncStorage.getItem("userToken");
+
+      if (!token) {
+        router.replace("/(tabs)/(auth)/signin/page");
+        return;
+      }
+
+      setLoading(false);
+    }
+    check();
+  }, []);
+
+  if (loading) return null;
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -45,3 +66,5 @@ export default function AppLayout() {
     </ThemeProvider>
   );
 }
+
+

@@ -15,7 +15,7 @@ type Certificado = {
 export default function Certicate() {
   const[certificados, setCertificados] = useState<Certificado[]>([]);
   useEffect(() => {
-    fetch("http://192.168.1.106/SICAD/certificado.php")
+    fetch("http://192.168.1.104/SICAD/certificado.php")
     .then((res) => res.json())
     .then((data) => setCertificados(data))
     .catch((err) => console.error("Erro ao carregar certificados:", err))

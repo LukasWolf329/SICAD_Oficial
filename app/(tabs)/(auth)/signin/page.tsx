@@ -1,14 +1,18 @@
-import { navigate } from "expo-router/build/global-state/routing";
-import "../../../../style/global.css";
 
-import { Link } from "expo-router";
+import "../../../../style/global.css";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Link, useRouter } from "expo-router";
 import React from 'react';
 import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
-
+import { authCheck } from "@/app/authCheck/authCheck";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function Login() {
+
+  authCheck(); 
+
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
   
@@ -17,6 +21,7 @@ export default function Login() {
   const [alertMessage, setAlertMessage] = React.useState("");
   const [alertTitle, setAlertTitle] = React.useState("Ocorreu um erro");
 
+  const router = useRouter();
 
   function showError(message: string, title = "Ocorreu um erro") {
   setAlertTitle(title);
@@ -24,39 +29,35 @@ export default function Login() {
   setAlertVisible(true);
 }
 
-  function handleSignIn() {
+async function handleSignIn() {
     console.log('Login com:', { email, senha });
     // Redireciona para a página de perfil após o login
     if (!email || !senha) {
       showError('Por favor, preencha todos os campos');
       return;
     }
-    fetch("http://192.168.1.106/SICAD/login.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    
+    try {
+      const response = await axios.post("http://192.168.1.104/SICAD/login.php",
+        {
+          email: email,
+          senha: senha,
+        },
+        {withCredentials: true}
+      );
 
-        email: email,
-        senha: senha,
-
-      }),
-      credentials:"include",
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log("Resposta do backend:", data);
-        if (data.success) {
-          
-          navigate('/(tabs)/(painel)/home/page');
-        } else {
-          showError(data.message || "Verifique suas credenciais e tente novamente.");
-        }
-      })
-      .catch((error) => {
-        console.error("Erro na requisição:", error);
-      });
+      console.log("Resposta do Backend: ", response.data);
+      if(response.data.success) {
+        const token = response.data.token;
+        await AsyncStorage.setItem("userToken", token);
+        router.replace("/(tabs)/(painel)/home/page");
+      }
+      else {
+        console.log(response.data.message || "Credenciais Invalidas");
+      }
+    } catch (error) {
+      console.error("Erro na requisicao: ", error);
+    }
   }
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
