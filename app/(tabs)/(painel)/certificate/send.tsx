@@ -18,14 +18,14 @@ type Certificado = {
 export default function SendCerticate() {
   const [certificados, setCertificados] = useState<Certificado[]>([]);
   useEffect(() => {
-    fetch("http://192.168.1.104/SICAD/get_certificados.php")
+    fetch("http://200.18.141.92/SICAD/get_certificados.php")
     .then((res) => res.json())
     .then((data) => setCertificados(data))
     .catch((err) => console.error("Erro ao carregar os certificados: ", err))
   }, []);
 
   const handleSendAll = () => {
-    fetch("http://192.168.1.104/SICAD/enviar_certificado_todos.php", {
+    fetch("http://200.18.141.92/SICAD/enviar_certificado_todos.php", {
     method:"POST",
     })
 

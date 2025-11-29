@@ -11,7 +11,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function Login() {
 
-  authCheck(); 
+  //authCheck(); 
 
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
@@ -38,21 +38,26 @@ async function handleSignIn() {
     }
     
     try {
-      const response = await axios.post("http://192.168.1.104/SICAD/login.php",
+      const response = await axios.post("http://200.18.141.92/SICAD/login.php",
         {
           email: email,
           senha: senha,
         },
-        {withCredentials: true}
       );
 
       console.log("Resposta do Backend: ", response.data);
       if(response.data.success) {
         const token = response.data.token;
+        const nome = response.data.usuario.nome;
+        const id = response.data.usuario.id;
         await AsyncStorage.setItem("userToken", token);
-        router.replace("/(tabs)/(painel)/home/page");
+        await AsyncStorage.setItem("userName", nome);
+        await AsyncStorage.setItem("userId", id);
+        router.push("/(tabs)/(painel)/home/page");
       }
       else {
+        setAlertMessage(response.data.message);
+        setAlertVisible(true);
         console.log(response.data.message || "Credenciais Invalidas");
       }
     } catch (error) {

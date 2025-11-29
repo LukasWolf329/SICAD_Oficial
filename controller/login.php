@@ -1,29 +1,12 @@
 <?php
-// ===== CONFIGURAÇÃO DE CORS =====
-$allowed_origins = [
-    'http://localhost:8081',
-    'http://192.168.1.104:8081',
-    'http://192.168.1.104'
-];
-
-if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
-    header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
-    header("Access-Control-Allow-Credentials: true");
-}
-
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit();
-}
 
 require("db.php");
 require("functions.php");
 
-// ===== LÓGICA DO LOGIN =====
 $data = json_decode(file_get_contents('php://input'), true);
 
 if (isset($data['email'], $data['senha'])) {
@@ -41,14 +24,14 @@ if (isset($data['email'], $data['senha'])) {
 
         if (password_verify($senha, $usuario['senha'])) {
 
-            // === GERAR TOKEN SEGURO ===
-            $token = bin2hex(random_bytes(32)); // 64 chars seguro
+            
+            $token = bin2hex(random_bytes(32)); 
 
-            // SALVAR TOKEN NO BANCO (crie tabela se ainda não tiver)
+            
             $stmtToken = $conn->prepare("UPDATE usuario SET token = ? WHERE ID = ?");
             $stmtToken->bind_param("si", $token, $usuario['ID']);
             $stmtToken->execute();
-
+            $_POST['id_usuario'] = $usuario['ID'];
             echo json_encode([
                 "success" => true,
                 "token" => $token,
@@ -63,5 +46,14 @@ if (isset($data['email'], $data['senha'])) {
     }
 }
 
-echo json_encode(["success" => false, "message" => "Credenciais inválidas"]);
+echo json_encode([
+  "success" => false,
+  "message" => "Credenciais inválidas",
+  "debug" => [
+      "email" => $email,
+      "senhaRecebida" => $senha,
+      "usuarioEncontrado" => isset($usuario) ? $usuario : null
+  ]
+]);
+
 ?>

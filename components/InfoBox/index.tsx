@@ -126,7 +126,7 @@ export function ParticipantCertifyBox({
 
   const enviarCertificado = async () => {
     try {
-      const response = await fetch("http://192.168.1.100/SICAD/enviar_certificado.php", {
+      const response = await fetch("http://200.18.142.4/SICAD/enviar_certificado.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

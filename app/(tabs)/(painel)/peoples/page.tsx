@@ -15,7 +15,7 @@ type Pessoa = {
 export default function Profile() {
     const[pessoas, setPessoas] = useState<Pessoa[]>([]);
     useEffect(() => {
-        fetch("http://192.168.1.104/SICAD/people.php")
+        fetch("http://200.18.141.92/SICAD/people.php")
         .then((res) => res.json())
         .then((data) => setPessoas(data))
         .catch((err) => console.error("Erro ao carregar pessoas:", err))

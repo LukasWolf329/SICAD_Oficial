@@ -1,69 +1,56 @@
 <?php
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
+
 require('db.php');
 
-$evento_id = 1;
-$response = [];
+$input = json_decode(file_get_contents('php://input'), true);
+$evento_id = $input['evento_id'] ?? null;
 
-// ---------------- total de participantes ----------------
-$stmt = $conn->prepare("SELECT COUNT(DISTINCT usuario_id) AS total_cadastrados
-FROM vw_num_cadastrados_evento
-WHERE evento_id = ?;
-");
-
-$stmt->bind_param("i", $evento_id);
-
-if ($stmt->execute()) {
-    $stmt->bind_result($total_participantes);
-    if ($stmt->fetch()) {
-        $response['total_participantes'] = (int)$total_participantes;
-    } else {
-        $response['total_participantes'] = 0;
-    }
+if (!$evento_id) {
+    echo json_encode(["error" => "evento_id não enviado"]);
+    exit;
 }
-$stmt->close();
 
-// ---------------- total de atividades ----------------
-$stmt = $conn->prepare('
-    SELECT COUNT(*) AS total_atividades
-    FROM Atividade
-    WHERE fk_Evento_codigo = ?
-');
+$sql = "
+SELECT 
+    e.nome AS evento_nome,
+
+    COALESCE((
+        SELECT COUNT(DISTINCT v.usuario_id)
+        FROM vw_num_cadastrados_evento v
+        WHERE v.evento_id = e.codigo
+    ), 0) AS total_participantes,
+
+    COALESCE((
+        SELECT COUNT(*)
+        FROM Atividade a
+        WHERE a.fk_Evento_codigo = e.codigo
+    ), 0) AS atividades_cadastradas,
+
+    COALESCE((
+        SELECT total_certificados
+        FROM total_certificados_evento tc
+        WHERE tc.evento_id = e.codigo
+    ), 0) AS total_certificados
+
+FROM Evento e
+WHERE e.codigo = ?;
+";
+
+$stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $evento_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-if ($stmt->execute()) {
-    $stmt->bind_result($total_atividades);
-    if ($stmt->fetch()) {
-        $response['atividades_cadastradas'] = (int)$total_atividades;
-    } else {
-        $response['atividades_cadastradas'] = 0;
-    }
+if ($row = $result->fetch_assoc()) {
+    echo json_encode($row, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+} else {
+    echo json_encode(["error" => "Evento não encontrado"]);
 }
+
 $stmt->close();
-
-// ---------------- total de certificados ----------------
-$stmt = $conn->prepare('
-    SELECT total_certificados 
-    FROM total_certificados_evento 
-    WHERE evento_id = ?
-');
-$stmt->bind_param("i", $evento_id);
-
-if ($stmt->execute()) {
-    $stmt->bind_result($total_certificados);
-    if ($stmt->fetch()) {
-        $response['total_certificados'] = (int)$total_certificados;
-    } else {
-        $response['total_certificados'] = 0;
-    }
-}
-$stmt->close();
-
-// ---------------- fecha conexão e responde ----------------
 $conn->close();
-
-echo json_encode($response);
 ?>
