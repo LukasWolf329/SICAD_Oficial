@@ -30,6 +30,13 @@ export default function Index() {
         </Pressable>
       </Link>
 
+      {/* Botão Validar Certificado */}
+      <Link href="/(tabs)/(auth)/validate/page" className="w-full">
+        <Pressable className="w-full border border-gray-300 dark:border-gray-500 rounded-xl my-4 px-4 py-3 text-center">
+          <Text className="text-lg font-semibold dark:color-white">Verificar Certificado</Text>
+        </Pressable>
+      </Link>
+
     </View>
 
     
