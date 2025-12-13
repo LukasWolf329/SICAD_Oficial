@@ -191,7 +191,7 @@ export function NavBar() {
       {/* ---------------- MODAL PERFIL ---------------- */}
       <Modal visible={showPerfil} animationType="fade" transparent onRequestClose={() => setShowPerfil(false)}>
         <View className="flex-1 bg-black/40 justify-center items-center">
-          <View className="w-4/12 bg-white rounded-2xl shadow-xl max-h-[80%]">
+          <View className="w-2/12 bg-white rounded-2xl shadow-xl max-h-[80%]">
 
             <View className="bg-[#2192FF] rounded-t-2xl flex-row justify-between items-center px-4 py-3">
               <Ionicons name="person-circle-outline" size={22} color="#fff" />
