@@ -1,11 +1,19 @@
+import { useSearchParams } from "expo-router/build/hooks";
 import React from "react";
 import { Platform, ScrollView } from "react-native";
 import { View } from "react-native-web";
 import { WebView } from "react-native-webview";
+import { useLocalSearchParams } from "expo-router";
 
 export default function CertificateModify() {
-  const pageUrl = "http://127.0.0.1:5500/app/(tabs)/(painel)/certificate/editor.html"; // arquivo na pasta public
+  const { atividade_id } = useLocalSearchParams<{ atividade_id?: string }>();
 
+  const pageUrlBase = "http://localhost/SICAD/editor/index.html";
+
+  
+  const pageUrl = atividade_id
+    ? `${pageUrlBase}?atividade_id=${atividade_id}`
+    : pageUrlBase;
   return (
     <View>
       {Platform.OS === "web" ? (

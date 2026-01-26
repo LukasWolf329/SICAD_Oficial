@@ -38,7 +38,7 @@ async function handleSignIn() {
     }
     
     try {
-      const response = await axios.post("http://200.18.141.92/SICAD/login.php",
+      const response = await axios.post("http://192.168.1.9/SICAD/login.php",
         {
           email: email,
           senha: senha,

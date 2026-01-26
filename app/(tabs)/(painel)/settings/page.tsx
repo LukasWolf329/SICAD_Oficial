@@ -18,7 +18,7 @@ export default function Settings() {
                 <View className="border-b-2 border-slate-300 pb-4 mb-4">
                     <View>
                     <Text className="font-bold text-2xl">Informações Basicas</Text>
-                    <Text>Dê um nome ao seu ecento, faça ele se destacar e o torne unico</Text>
+                    <Text>Dê um nome ao seu evento, faça ele se destacar e o torne unico</Text>
                     </View> <View className="mt-4">
                         <Text>Titulo do Evento</Text>
                         <TextInput className="mb-2 w-full bg-transparent border border-slate-400 rounded-lg px-2 py-1 color-slate-500 dark:color-white"/>

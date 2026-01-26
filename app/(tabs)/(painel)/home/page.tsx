@@ -1,12 +1,12 @@
 import "../../../../style/global.css";
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Text, View, Image, ScrollView, Pressable } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
 
+import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { InfoBox } from "@/components/InfoBox";
 import { useLocalSearchParams } from "expo-router";
-import { Mainframe } from '../../../../components/NavBar';
 
 export default function HomePage() {
     const { id } = useLocalSearchParams();
@@ -17,7 +17,7 @@ export default function HomePage() {
     const [eventoNome, setEventoNome] = useState<string>("");
 
     useEffect(() => {
-        fetch("http://200.18.141.92/SICAD/page-org.php",
+        fetch("http://192.168.1.9/SICAD/page-org.php",
             {
                 method: "POST",
                 headers: {
@@ -44,7 +44,7 @@ export default function HomePage() {
                 <View className="flex-row justify-center gap-4">
                     <InfoBox name="Total de Inscritos" icon="people" counter={(totalInscritos ?? 0).toString()}></InfoBox>
                     <InfoBox name="Certificados Emitidos" icon="card-outline" counter={(totalCertificados ?? 0).toString()}></InfoBox>
-                    <InfoBox name="Total de Inscritos" icon="book-outline" counter={(atividadesCadastradas ?? 0).toString()}></InfoBox>
+                    <InfoBox name="Total de Atividades" icon="book-outline" counter={(atividadesCadastradas ?? 0).toString()}></InfoBox>
                 </View>
 
 
@@ -61,17 +61,8 @@ export default function HomePage() {
                     </View>
                     <View className="flex-row justify-between items-center mb-8">
                         <View className="flex-row items-center gap-2">
-                            <Ionicons name="checkmark-circle" size={48} className="color-green-600" />
-                            <Text className="text-xl dark:color-white">Cadastrar Entradas</Text>
-                        </View>
-                        <View>
-                            <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
-                        </View>
-                    </View>
-                    <View className="flex-row justify-between items-center mb-8">
-                        <View className="flex-row items-center gap-2">
-                            <Ionicons name="checkmark-circle" size={48} className="color-green-600" />
-                            <Text className="text-xl dark:color-white">Configurar Certificados</Text>
+                            <Ionicons name="checkmark-circle" size={48} className="color-slate-300" />
+                            <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                         </View>
                         <View>
                             <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
@@ -80,7 +71,16 @@ export default function HomePage() {
                     <View className="flex-row justify-between items-center mb-8">
                         <View className="flex-row items-center gap-2">
                             <Ionicons name="checkmark-circle" size={48} className="color-slate-300" />
-                            <Text className="text-xl dark:color-white">Evento Publicado</Text>
+                            <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
+                        </View>
+                        <View>
+                            <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>
+                        </View>
+                    </View>
+                    <View className="flex-row justify-between items-center mb-8">
+                        <View className="flex-row items-center gap-2">
+                            <Ionicons name="checkmark-circle" size={48} className="color-slate-300" />
+                            <Text className="text-xl dark:color-white">Crie Seu Evento</Text>
                         </View>
                         <View>
                             <Pressable className="border dark:border-[#e0e0e0] rounded-xl px-4 py-2 w-min text-xl dark:color-[#e0e0e0]">Acesse</Pressable>

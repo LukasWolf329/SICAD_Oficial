@@ -1,21 +1,24 @@
-
 import "../../../../style/global.css";
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { Link, useRouter } from "expo-router";
-import React from 'react';
-import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
-import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
-import { authCheck } from "@/app/authCheck/authCheck";
+import React from "react";
+import {
+  Image,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 
-export default function Login() {
-
-  //authCheck(); 
-
-  const [email, setEmail] = React.useState('');
-  const [senha, setSenha] = React.useState('');
-  
+export default function Signup() {
+  const [nome, setNome] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [senha, setSenha] = React.useState("");
+  const [c_senha, setCSenha] = React.useState("");
 
   const [alertVisible, setAlertVisible] = React.useState(false);
   const [alertMessage, setAlertMessage] = React.useState("");
@@ -24,87 +27,163 @@ export default function Login() {
   const router = useRouter();
 
   function showError(message: string, title = "Ocorreu um erro") {
-  setAlertTitle(title);
-  setAlertMessage(message);
-  setAlertVisible(true);
-}
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  }
 
-async function handleSignIn() {
-    console.log('Login com:', { email, senha });
-    // Redireciona para a página de perfil após o login
-    if (!email || !senha) {
-      showError('Por favor, preencha todos os campos');
+  async function handleSignUp() {
+    if (!nome || !email || !senha || !c_senha) {
+      showError("Por favor, preencha todos os campos");
       return;
     }
-    
-    try {
-      const response = await axios.post("http://200.18.141.92/SICAD/login.php",
-        {
-          email: email,
-          senha: senha,
-        },
-      );
+    if (senha !== c_senha) {
+      showError("As senhas não coincidem");
+      return;
+    }
 
-      console.log("Resposta do Backend: ", response.data);
-      if(response.data.success) {
-        const token = response.data.token;
-        const nome = response.data.usuario.nome;
-        const id = response.data.usuario.id;
-        await AsyncStorage.setItem("userToken", token);
-        await AsyncStorage.setItem("userName", nome);
-        await AsyncStorage.setItem("userId", id);
+    try {
+      const res = await fetch("http://192.168.1.9/SICAD/cadastro.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, email, senha }), // c_senha não é usada no PHP
+      });
+
+      // Se o PHP retornar HTML/erro, isso evita crash no .json()
+      const raw = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        showError("Resposta inválida do servidor (não veio JSON).");
+        console.log("Resposta bruta do servidor:", raw);
+        return;
+      }
+
+      console.log("Resposta do backend:", data);
+
+      if (data?.success) {
         router.push("/(tabs)/(painel)/home/page");
+      } else {
+        showError(data?.message ?? "Erro ao cadastrar usuário");
       }
-      else {
-        setAlertMessage(response.data.message);
-        setAlertVisible(true);
-        console.log(response.data.message || "Credenciais Invalidas");
-      }
-    } catch (error) {
-      console.error("Erro na requisicao: ", error);
+    } catch (error: any) {
+      console.error("Erro na requisição:", error);
+      showError(error?.message ?? "Erro na requisição");
     }
   }
+
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
-      <View id="aside" className=" w-5/12"> 
-        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden"/>
+      <View id="aside" className="w-5/12">
+        <Image
+          source={require("../../../../assets/images/side-view-login-cadastro.png")}
+          style={{ width: "100%" }}
+        />
       </View>
+
       <View className="flex-1 items-center justify-center">
-        <View>
-          <Image source={require('../../../../assets/images/logo-composta.png')} className="mb-4" />
-          <Text className="text-6xl dark:color-white">Acesse sua conta</Text>
-          <Text className="text-2xl dark:color-white">Ainda não tem uma conta ? <Link href={'/(tabs)/(auth)/signup/page'} className="text-2xl color-sky-500">clique aqui para criar uma </Link></Text>
-          <form action="" className="flex flex-col gap-1 mt-4">
-            <View>
-              <Text className="text-2xl dark:color-white">E-mail</Text>
-              <SafeAreaProvider>
-                <SafeAreaView>
-                  <TextInput value={email} onChangeText={setEmail} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"/>
-                </SafeAreaView>
-              </SafeAreaProvider>
-            </View>
-            <View>
-                <Text className="text-2xl dark:color-white">Senha</Text>
-                <SafeAreaProvider>
-                  <SafeAreaView>
-                    <TextInput secureTextEntry={true} value={senha} onChangeText={setSenha} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"/>
-                  </SafeAreaView>
-                </SafeAreaProvider>                
-            </View>
-            <Pressable onPress={handleSignIn} className="w-full h-12 rounded-xl bg-green-600 text-2xl font-bold mt-4 color-white justify-center items-center">Entrar</Pressable>
-          </form>
-          <Link href={'/(tabs)/(auth)/signup/page'} className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Link>
-        </View>
+        <ScrollView>
+          <View>
+            <Image
+              source={require("../../../../assets/images/logo-composta.png")}
+              className="mb-4"
+            />
+            <Text className="text-6xl dark:color-white">Crie sua conta</Text>
+
+            <Text className="text-2xl dark:color-white">
+              Ja tem uma conta ?{" "}
+              <Link href={"../signin/page"} className="text-2xl color-sky-500">
+                clique aqui para fazer login
+              </Link>
+            </Text>
+
+            <SafeAreaProvider>
+              <SafeAreaView>
+                <View className="flex flex-col gap-1 mt-4">
+                  <View>
+                    <Text className="text-2xl dark:color-white">
+                      Nome Completo
+                    </Text>
+                    <TextInput
+                      value={nome}
+                      onChangeText={setNome}
+                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                    />
+                    <Text className="dark:color-white mt-0">
+                      Este nome sera utilizado em todos os documentos da
+                      plataforma
+                    </Text>
+                  </View>
+
+                  <View>
+                    <Text className="text-2xl dark:color-white">E-mail</Text>
+                    <TextInput
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                    />
+                  </View>
+
+                  <View>
+                    <Text className="text-2xl dark:color-white">Senha</Text>
+                    <TextInput
+                      secureTextEntry
+                      value={senha}
+                      onChangeText={setSenha}
+                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                    />
+                  </View>
+
+                  <View>
+                    <Text className="text-2xl dark:color-white">
+                      Confirmar Senha
+                    </Text>
+                    <TextInput
+                      secureTextEntry
+                      value={c_senha}
+                      onChangeText={setCSenha}
+                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                    />
+                  </View>
+
+                  <View className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 mt-4 px-2 py-2">
+                    <Text className="dark:color-white">
+                      Ao criar uma conta, você concorda com os{" "}
+                      <Link href={"/"} className="dark:color-white underline">
+                        Termos de Serviço
+                      </Link>{" "}
+                      e a{" "}
+                      <Link href={"/"} className="dark:color-white underline">
+                        Política de Privacidade
+                      </Link>{" "}
+                      da plataforma.
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    onPress={handleSignUp}
+                    className="w-full h-12 rounded-xl bg-green-600 mt-4 justify-center items-center"
+                  >
+                    <Text className="text-2xl font-bold color-white">
+                      Criar conta
+                    </Text>
+                  </Pressable>
+                </View>
+              </SafeAreaView>
+            </SafeAreaProvider>
+          </View>
+        </ScrollView>
       </View>
+
       <NiceAlert
-      visible={alertVisible}
-      title={alertTitle}
-      message={alertMessage}
-      onClose={() => setAlertVisible(false)}
-    />
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 }
-
-
-//navigate('/(tabs)/(painel)/home/page');

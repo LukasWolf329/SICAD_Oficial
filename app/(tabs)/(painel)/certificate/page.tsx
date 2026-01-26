@@ -10,12 +10,13 @@ import { CertifyBox, InfoBox, PeopleBox } from "@/components/InfoBox";
 
 type Certificado = {
   titulo: string;
+  atividade_id: number;
 }
 
 export default function Certicate() {
   const[certificados, setCertificados] = useState<Certificado[]>([]);
   useEffect(() => {
-    fetch("http://200.18.141.92/SICAD/certificado.php")
+    fetch("http://192.168.1.9/SICAD/certificado.php")
     .then((res) => res.json())
     .then((data) => setCertificados(data))
     .catch((err) => console.error("Erro ao carregar certificados:", err))
@@ -74,6 +75,7 @@ export default function Certicate() {
                       modelo={"Padrão"}
                       att = {"Automática"}
                       status={"Ativo"}
+                      atividade_id={certificado.atividade_id}
                     />
                   )}
                 </View>

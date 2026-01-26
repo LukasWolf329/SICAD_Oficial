@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Dimensions, Image, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-interface InputProps {  
+interface InputProps {
   icon: string;
   counter?: string;
   name?: string;
@@ -16,9 +16,8 @@ export function InfoBox({ icon, counter, name }: InputProps) {
 
   return (
     <View
-      className={`border border-slate-400 flex-row ${
-        isSmall ? 'flex-col items-center w-full' : 'justify-between w-[30%]'
-      } py-4 px-5 rounded-xl mt-4`}
+      className={`border border-slate-400 flex-row ${isSmall ? 'flex-col items-center w-full' : 'justify-between w-[30%]'
+        } py-4 px-5 rounded-xl mt-4`}
     >
       <Ionicons name={icon} size={30} className="dark:color-[#e0e0e0] mb-2" />
       <View className={isSmall ? 'items-center' : 'items-end'}>
@@ -29,11 +28,11 @@ export function InfoBox({ icon, counter, name }: InputProps) {
   );
 }
 
-export function PeopleBox({photo, name, email}:{photo?: string; name?:string; email?:string}){
+export function PeopleBox({ photo, name, email }: { photo?: string; name?: string; email?: string }) {
   return (
     <View className='border border-slate-400 flex-row justify-between items-center py-2 px-5 rounded-xl mt-2'>
       <View className='flex-row items-center gap-2'>
-        <Image source={require('../../assets/images/user.png')} style={{width:60, height:60}} className='rounded-full'/>
+        <Image source={require('../../assets/images/user.png')} style={{ width: 60, height: 60 }} className='rounded-full' />
         <View>
           <Text className='text-xl font-semibold dark:color-white'>{name}</Text>
           <Text className='text-base dark:color-white'>{email}</Text>
@@ -49,12 +48,14 @@ export function CertifyBox({
   modelo,
   att,
   status,
+  atividade_id,
 }: {
   titulo?: string;
   valor?: number;
   modelo?: string;
   att?: string;
   status?: string;
+  atividade_id: number;
 }) {
   return (
     <View className="flex-row border-b border-slate-300">
@@ -76,8 +77,14 @@ export function CertifyBox({
 
       {/* MODELO */}
       <View className="w-2/12 p-2 justify-center items-center">
-        <Pressable 
-          onPress={() => router.push("./certicateScreen")}
+        <Pressable
+          onPress={() =>
+            router.push({
+
+              pathname: "./certicateScreen",
+              params: { atividade_id: String(atividade_id) }
+            })
+          }
           className="flex-row bg-[#FF6200] rounded-lg px-2 py-1 justify-center items-center">
           <Ionicons name="warning-outline" size={16} color="white" />
           <Text className="text-white ml-1">Criar Modelo</Text>
@@ -117,34 +124,16 @@ export function CertifyBox({
 export function ParticipantCertifyBox({
   participante,
   email,
-  status
+  status,
+  onSend,
 }: {
   participante?: string;
   email?: string;
   status?: number;
+  onSend?: () => Promise<void> | void;
 }) {
 
-  const enviarCertificado = async () => {
-    try {
-      const response = await fetch("http://200.18.142.4/SICAD/enviar_certificado.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
 
-      const data = await response.json();
-
-      if (data.success) {
-        console.log(`Certificado enviado para ${email}`);
-      } else {
-        console.log("Erro:", data.message || "Falha ao enviar certificado.");
-      }
-    } catch (error) {
-      console.error("Erro ao enviar certificado:", error);
-    }
-  };
   return (
     <View className="flex-row border-b border-slate-300">
       {/* TITULO */}
@@ -159,26 +148,27 @@ export function ParticipantCertifyBox({
 
       {/* STATUS */}
       <View className="w-2/12 p-2 justify-center items-center">
-      {status === 1 ? (
-        <Pressable className="bg-[#FF0004] opacity-50 rounded-lg px-2 py-1">
-          <Text className="text-white text-center">Não enviado</Text>
-        </Pressable>
-      ) : (
-        <Pressable className="bg-[#2192ff] opacity-50 rounded-lg px-2 py-1">
-          <Text className="text-white text-center">Enviado</Text>
-        </Pressable>
-      )}
-    </View>
+        {Number(status) === 1 ? (
+          <Pressable className="bg-[#2192ff] rounded-lg px-2 py-1">
+            <Text className="text-white text-center">Enviado</Text>
+          </Pressable>
+        ) : (
+          <Pressable className="bg-[#FF0004] rounded-lg px-2 py-1">
+            <Text className="text-white text-center">Não enviado</Text>
+          </Pressable>
+        )}
+      </View>
+
 
       {/* OPÇÕES */}
       <View className="w-2/12 p-2 flex-row gap-1 justify-center items-center">
-        <Pressable onPress={enviarCertificado} className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
+        <Pressable className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
           <Ionicons name="checkmark" size={16} className="color-slate-400" />
           <Text className="color-slate-400 ml-1">Publicar</Text>
         </Pressable>
-        <Pressable className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
+        <Pressable onPress={onSend}  className="flex-row border border-slate-400 rounded-lg px-2 py-1 justify-center items-center">
           <Ionicons name="paper-plane-outline" size={16} className="color-slate-400" />
-          <Text className="color-slate-400 ml-1">Envio</Text>
+          <Text className="color-slate-400 ml-1">Enviar</Text>
         </Pressable>
       </View>
     </View>

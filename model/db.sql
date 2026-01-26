@@ -351,3 +351,25 @@ FROM sicad.usuario    AS u
 JOIN sicad.participa  AS p ON u.ID = p.fk_Usuario_ID
 JOIN sicad.atividade  AS a ON p.fk_Atividade_ID = a.ID
 JOIN sicad.evento     AS e ON a.fk_Evento_codigo = e.codigo;
+
+
+CREATE TABLE templatecertificado (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    json JSON NOT NULL,
+    imagem_preview BLOB NULL,
+    imagem_render BLOB NULL,
+    data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fk_Atividade_ID INT NOT NULL,
+
+    CONSTRAINT fk_templatecertificado_atividade
+        FOREIGN KEY (fk_Atividade_ID)
+        REFERENCES atividade(ID)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+);
+
+
+ALTER TABLE atividade
+ADD COLUMN status_envio TINYINT(1) NOT NULL DEFAULT 0
+COMMENT '0 = não enviado, 1 = enviado';
