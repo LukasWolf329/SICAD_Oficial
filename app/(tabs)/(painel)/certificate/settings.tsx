@@ -1,6 +1,6 @@
 import "../../../../style/global.css";
 
-import React from 'react';
+
 import { Text, View, Image, ScrollView, Pressable, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 
@@ -8,11 +8,24 @@ import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../compone
 import { CertifyBox, InfoBox, ParticipantCertifyBox, PeopleBox } from "@/components/InfoBox";
 import { router } from "expo-router";
 import { CheckBox } from "react-native-web";
+import { getLastEventoNome } from "@/app/utils/lastEvento";
+import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 
 export default function SendCerticate() {
+  const [eventoNome, setEventoNome] = useState<string>("Evento");
+  useEffect(() => {
+    (async () => {
+      const userId = await AsyncStorage.getItem("userId");
+      const nome = await getLastEventoNome(userId);
+      if (nome) setEventoNome(nome);
+    })();
+  }, []);
+
   return (
     <ScrollView className="flex-1  dark:bg-black">
-        <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
+        <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
           <View className="px-8">
             <Text className="text-2xl dark:color-white">Certificados</Text>
               <View className="flex-row items-center justify-between my-2">

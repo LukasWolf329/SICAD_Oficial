@@ -7,6 +7,9 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { CertifyBox, InfoBox, ParticipantCertifyBox, PeopleBox } from "@/components/InfoBox";
 import { router } from "expo-router";
+import { getLastEventoId } from "@/app/utils/lastEvento";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLastEventoNome } from "@/app/utils/lastEvento";
 
 type Certificado = {
   cod_certificado: number;
@@ -17,21 +20,95 @@ type Certificado = {
 
 
 export default function SendCerticate() {
+  const [eventoId, setEventoId] = useState<number | null>(null);
+  const [eventoNome, setEventoNome] = useState<string>("Evento");
+
   const [certificados, setCertificados] = useState<Certificado[]>([]);
+  const [loadingEvento, setLoadingEvento] = useState(true);
+  const [loadingCertificados, setLoadingCertificados] = useState(false);
+
+  const [busca, setBusca] = useState("");
+
+  // 1) Descobrir o último evento do usuário + (opcional) nome do evento
   useEffect(() => {
-    fetch(`http://192.168.1.9/SICAD/get_certificado.php?t=${Date.now()}`) // para nao carregar o cache de sessoes anteriores
+    let alive = true;
+
+    (async () => {
+      try {
+        const userId = await AsyncStorage.getItem("userId");
+        const lastId = await getLastEventoId(userId);
+
+        if (!alive) return;
+
+        if (!lastId) {
+          // Sem último evento -> manda pra tela de escolher evento
+          router.replace("/(tabs)/(painel)/certificate/send"); 
+          return;
+        }
+
+        setEventoId(lastId);
+
+        // (Opcional) pegar nome do evento pra mostrar no Mainframe
+        const res = await fetch("http://192.168.1.9/SICAD/page-org.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento_id: lastId }),
+        });
+
+        const json = await res.json();
+        if (!alive) return;
+
+        setEventoNome(json?.evento_nome ?? "Evento");
+      } catch (err) {
+        console.error("Erro ao carregar último evento:", err);
+      } finally {
+        if (alive) setLoadingEvento(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 2) Carregar certificados quando já tiver eventoId
+  useEffect(() => {
+    if (!eventoId) return;
+
+    const controller = new AbortController();
+    setLoadingCertificados(true);
+
+    // ✅ Opção A (RECOMENDADA): enviar evento_id no body (POST)
+    fetch(`http://192.168.1.9/SICAD/get_certificado.php?t=${Date.now()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evento_id: eventoId }),
+      signal: controller.signal,
+    })
       .then((res) => res.json())
-      .then((data) =>
+      .then((data) => {
+        const lista = Array.isArray(data) ? data : data?.certificados ?? [];
+
         setCertificados(
-          data.map((c: any) => ({
-            ...c,
+          lista.map((c: any) => ({
             cod_certificado: Number(c.cod_certificado),
+            participante: String(c.participante ?? ""),
+            email: String(c.email ?? ""),
             status: Number(c.status ?? 0),
           }))
-        )
-      )
-      .catch((err) => console.error("Erro ao carregar os certificados: ", err));
-  }, []);
+        );
+      })
+      .catch((err) => {
+        if ((err as any)?.name !== "AbortError") {
+          console.error("Erro ao carregar os certificados: ", err);
+        }
+      })
+      .finally(() => setLoadingCertificados(false));
+
+    return () => controller.abort();
+  }, [eventoId]);
+
+
 
 
 
@@ -72,11 +149,17 @@ export default function SendCerticate() {
     }
   };
 
-
+  useEffect(() => {
+    (async () => {
+      const userId = await AsyncStorage.getItem("userId");
+      const nome = await getLastEventoNome(userId);
+      if (nome) setEventoNome(nome);
+    })();
+  }, []);
 
   return (
     <ScrollView className="flex-1 dark:bg-black">
-      <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
+      <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
         <View className="px-8">
           <Text className="text-2xl dark:color-white">Certificados</Text>
           <View className="flex-row items-center justify-between my-2">

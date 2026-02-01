@@ -11,7 +11,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function Login() {
 
-  //authCheck(); 
+  authCheck(); 
 
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');

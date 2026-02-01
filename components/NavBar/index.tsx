@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/build/Ionicons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useNavigation } from 'expo-router';
+import { logout } from '@/app/utils/logout';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -56,7 +57,7 @@ export function NavBar() {
         const userId = await AsyncStorage.getItem("userId");
 
         const response = await fetch(
-          "http://200.18.141.92/SICAD/get_dropdown_eventos.php",
+          "http://192.168.1.9/SICAD/get_dropdown_eventos.php",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -76,9 +77,14 @@ export function NavBar() {
   }, []);
 
   /* ---------------- Abrir evento com params ---------------- */
-  function abrirEvento(eventoId: number) {
+  async function abrirEvento(eventoId: number) {
     setShowEventos(false);
 
+    const userId = await AsyncStorage.getItem("userId");
+    const key = userId ? `lastEventoId${userId}` : "lastEventoId";
+
+    await AsyncStorage.setItem(key, String(eventoId));
+    
     router.push({
       pathname: "/(tabs)/(painel)/home/page",
       params: { id: eventoId },
@@ -212,8 +218,8 @@ export function NavBar() {
             <Pressable className="p-3 mt-2 flex-row items-center">
               <Text className="font-semibold">Meus Materiais</Text>
             </Pressable>
-
-            <Pressable className="border-t p-3 mt-2 flex-row items-center rounded-b-2xl">
+            
+            <Pressable onPress={logout} className="border-t p-3 mt-2 flex-row items-center rounded-b-2xl">
               <Ionicons name="log-out-outline" size={20} />
               <Text className="font-semibold ml-2">Sair</Text>
             </Pressable>

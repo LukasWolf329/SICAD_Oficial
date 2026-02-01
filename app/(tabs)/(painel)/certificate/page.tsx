@@ -7,6 +7,9 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 
 import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../components/NavBar';
 import { CertifyBox, InfoBox, PeopleBox } from "@/components/InfoBox";
+import { getLastEventoId } from "@/app/utils/lastEvento";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLastEventoNome } from "@/app/utils/lastEvento";
 
 type Certificado = {
   titulo: string;
@@ -14,17 +17,98 @@ type Certificado = {
 }
 
 export default function Certicate() {
-  const[certificados, setCertificados] = useState<Certificado[]>([]);
+
+    const [eventoId, setEventoId] = useState<number | null>(null);
+  const [eventoNome, setEventoNome] = useState<string>("Evento");
+  const [certificados, setCertificados] = useState<Certificado[]>([]);
+  const [loadingEvento, setLoadingEvento] = useState(true);
+  const [loadingCertificados, setLoadingCertificados] = useState(false);
+
+  // 1) Carrega userId -> lastEventoId
   useEffect(() => {
-    fetch("http://192.168.1.9/SICAD/certificado.php")
-    .then((res) => res.json())
-    .then((data) => setCertificados(data))
-    .catch((err) => console.error("Erro ao carregar certificados:", err))
-  }, [])
+    let alive = true;
+
+    (async () => {
+      try {
+        const userId = await AsyncStorage.getItem("userId");
+
+        const lastId = await getLastEventoId(userId);
+
+        if (!alive) return;
+
+        if (!lastId) {
+          // Se não tiver último evento salvo, manda pra uma tela de seleção
+          router.replace("/(tabs)/(painel)/certificate/page"); // <-- ajuste essa rota
+          return;
+        }
+
+        setEventoId(lastId);
+
+        // (Opcional) Buscar nome do evento pra mostrar no Mainframe
+        // Se você já tem um endpoint melhor, use ele.
+        const res = await fetch("http://192.168.1.9/SICAD/page-org.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento_id: lastId }),
+        });
+
+        const json = await res.json();
+        if (!alive) return;
+
+        setEventoNome(json?.evento_nome ?? "Evento");
+      } catch (err) {
+        console.error("Erro ao carregar último evento:", err);
+      } finally {
+        if (alive) setLoadingEvento(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 2) Busca certificados quando tiver eventoId
+  useEffect(() => {
+    if (!eventoId) return;
+
+    const controller = new AbortController();
+    setLoadingCertificados(true);
+
+    fetch("http://192.168.1.9/SICAD/certificado.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evento_id: eventoId }),
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // dependendo do seu backend, pode vir em data.certificados ou direto no array
+        const lista = Array.isArray(data) ? data : (data?.certificados ?? []);
+        setCertificados(lista);
+      })
+      .catch((err) => {
+        // ignora abort
+        if ((err as any)?.name !== "AbortError") {
+          console.error("Erro ao carregar certificados:", err);
+        }
+      })
+      .finally(() => setLoadingCertificados(false));
+
+    return () => controller.abort();
+  }, [eventoId]);
+
+  useEffect(() => {
+    (async () => {
+      const userId = await AsyncStorage.getItem("userId");
+      const nome = await getLastEventoNome(userId);
+      if (nome) setEventoNome(nome);
+    })();
+  }, []);
 
   return (
     <ScrollView className="flex-1 dark:bg-black">
-        <Mainframe name="SICAD - Evento de Teste " photoUrl="evento.png" link="www.evento.com">
+        <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
             <View className="px-8">
               <Text className="text-2xl dark:color-white">Certificados</Text>
                 <View className="flex-row items-center justify-between my-2">

@@ -2,6 +2,7 @@ import "../../../../style/global.css";
 
 import { Link, useRouter } from "expo-router";
 import React from "react";
+import { authCheck } from "@/app/authCheck/authCheck";
 import {
   Image,
   Pressable,
@@ -15,6 +16,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 
 export default function Signup() {
+
+  authCheck(); 
+
   const [nome, setNome] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [senha, setSenha] = React.useState("");

@@ -373,3 +373,13 @@ CREATE TABLE templatecertificado (
 ALTER TABLE atividade
 ADD COLUMN status_envio TINYINT(1) NOT NULL DEFAULT 0
 COMMENT '0 = não enviado, 1 = enviado';
+
+
+ALTER TABLE certificado
+  ADD UNIQUE KEY uk_certificado_codigo (codigo);
+  
+ ALTER TABLE certificado
+  MODIFY codigo_validacao CHAR(24) NOT NULL;
+
+ALTER TABLE certificado
+  ADD UNIQUE KEY uk_certificado_validacao (codigo_validacao);
