@@ -1,21 +1,22 @@
 
-import "../../../../style/global.css";
-import axios from "axios";
+import { useAuthCheck } from "@/app/useAuthCheck/useAuthCheck";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { Link, useRouter } from "expo-router";
 import React from 'react';
 import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
-import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
-import { authCheck } from "@/app/authCheck/authCheck";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
+import "../../../../style/global.css";
 
 export default function Login() {
 
-  authCheck(); 
+  useAuthCheck();
 
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
-  
+
+  const senhaInputRef = React.useRef<TextInput | null>(null);
 
   const [alertVisible, setAlertVisible] = React.useState(false);
   const [alertMessage, setAlertMessage] = React.useState("");
@@ -24,21 +25,21 @@ export default function Login() {
   const router = useRouter();
 
   function showError(message: string, title = "Ocorreu um erro") {
-  setAlertTitle(title);
-  setAlertMessage(message);
-  setAlertVisible(true);
-}
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  }
 
-async function handleSignIn() {
+  async function handleSignIn() {
     console.log('Login com:', { email, senha });
     // Redireciona para a página de perfil após o login
     if (!email || !senha) {
       showError('Por favor, preencha todos os campos');
       return;
     }
-    
+
     try {
-      const response = await axios.post("http://192.168.1.9/SICAD/login.php",
+      const response = await axios.post("http://192.168.2.110/SICAD/login.php",
         {
           email: email,
           senha: senha,
@@ -46,7 +47,7 @@ async function handleSignIn() {
       );
 
       console.log("Resposta do Backend: ", response.data);
-      if(response.data.success) {
+      if (response.data.success) {
         const token = response.data.token;
         const nome = response.data.usuario.nome;
         const id = response.data.usuario.id;
@@ -64,10 +65,35 @@ async function handleSignIn() {
       console.error("Erro na requisicao: ", error);
     }
   }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      showError("Digite seu e-mail para enviar o código de redefinição.");
+      return;
+    }
+
+    try {
+      const response = await axios.post("http://192.168.2.110/SICAD/forgot_password.php", {
+        email: email,
+      });
+
+      if (response.data?.success) {
+        showError(response.data.message, "Verifique seu e-mail");
+        // opcional: levar pra tela de redefinir
+        // router.push("/(tabs)/(auth)/reset-password/page");
+      } else {
+        showError(response.data?.message ?? "Não foi possível enviar o e-mail.");
+      }
+    } catch (error) {
+      console.error("Erro na requisicao: ", error);
+      showError("Erro de conexão. Tente novamente.");
+    }
+  }
+
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
-      <View id="aside" className=" w-5/12"> 
-        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden"/>
+      <View id="aside" className=" w-5/12">
+        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden" />
       </View>
       <View className="flex-1 items-center justify-center">
         <View>
@@ -79,32 +105,38 @@ async function handleSignIn() {
               <Text className="text-2xl dark:color-white">E-mail</Text>
               <SafeAreaProvider>
                 <SafeAreaView>
-                  <TextInput value={email} onChangeText={setEmail} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"/>
+                  <TextInput value={email} onChangeText={setEmail} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => senhaInputRef.current?.focus} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
                 </SafeAreaView>
               </SafeAreaProvider>
             </View>
             <View>
-                <Text className="text-2xl dark:color-white">Senha</Text>
-                <SafeAreaProvider>
-                  <SafeAreaView>
-                    <TextInput secureTextEntry={true} value={senha} onChangeText={setSenha} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"/>
-                  </SafeAreaView>
-                </SafeAreaProvider>                
+              <Text className="text-2xl dark:color-white">Senha</Text>
+              <SafeAreaProvider>
+                <SafeAreaView>
+                  <TextInput secureTextEntry={true} value={senha} onChangeText={setSenha} ref={senhaInputRef} returnKeyType="go" onSubmitEditing={() => handleSignIn()} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                </SafeAreaView>
+              </SafeAreaProvider>
             </View>
             <Pressable onPress={handleSignIn} className="w-full h-12 rounded-xl bg-green-600 text-2xl font-bold mt-4 color-white justify-center items-center">Entrar</Pressable>
           </form>
-          <Link href={'/(tabs)/(auth)/signup/page'} className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Link>
+          <Pressable onPress={handleForgotPassword}>
+            <Text className="dark:color-white underline text-xl mt-4">
+              Esqueceu sua senha ?
+            </Text>
+          </Pressable>
+          <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
+            Já tenho o token / redefinir senha
+          </Link>
         </View>
       </View>
       <NiceAlert
-      visible={alertVisible}
-      title={alertTitle}
-      message={alertMessage}
-      onClose={() => setAlertVisible(false)}
-    />
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 }
 
 
-//navigate('/(tabs)/(painel)/home/page');

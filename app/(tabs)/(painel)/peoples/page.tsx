@@ -60,7 +60,7 @@ export default function Profile() {
 
     const controller = new AbortController();
 
-    fetch("http://192.168.1.9/SICAD/people.php", {
+    fetch("http://192.168.2.109/SICAD/people.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),

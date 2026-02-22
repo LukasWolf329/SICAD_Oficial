@@ -2,22 +2,21 @@ import "../../../../style/global.css";
 
 import { Link, useRouter } from "expo-router";
 import React from "react";
-import { authCheck } from "@/app/authCheck/authCheck";
 import {
-  Image,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
+    Image,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 
 export default function Signup() {
 
-  authCheck(); 
+  //authCheck(); 
 
   const [nome, setNome] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -47,7 +46,7 @@ export default function Signup() {
     }
 
     try {
-      const res = await fetch("http://192.168.1.9/SICAD/cadastro.php", {
+      const res = await fetch("http://192.168.2.110/SICAD/cadastro.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, email, senha }), // c_senha não é usada no PHP

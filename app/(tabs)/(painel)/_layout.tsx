@@ -5,13 +5,14 @@ import { NavBar, SideBar, SideBarCategory } from "@/components/NavBar";
 import { View } from 'react-native';
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { EventosModalProvider } from "@/components/NavBar/EventosModalContext";
 
 export default function AppLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
-  
+
   useEffect(() => {
     async function check() {
       const token = await AsyncStorage.getItem("userToken");
@@ -29,41 +30,43 @@ export default function AppLayout() {
   if (loading) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <View className="flex-1 dark:bg-[#121212]">
-        <NavBar />
-        <View className="flex-1 flex-row">
-          <SideBar>
-            <SideBarCategory
-              titulo="Gestão"
-              itens={[
-                { nome: "Inicio", icone: "home-outline", link: "../home/page" },
-                { nome: "Pessoas", icone: "people", link: "../peoples/page" },
-              ]}
-              
-            />
-            <SideBarCategory
-              titulo="Pós-Evento"
-              itens={[
-                { nome: "Certificados", icone: "map", link: "../certificate/page" },
-              ]}
-            />
-            <SideBarCategory
-              titulo="Geral"
-              itens={[
-                { nome: "Configuração", icone: "settings-outline", link: "../settings/page" },
-              ]}
-            />
-          </SideBar>
+    <EventosModalProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <View className="flex-1 dark:bg-[#121212]">
+          <NavBar />
+          <View className="flex-1 flex-row">
+            <SideBar>
+              <SideBarCategory
+                titulo="Gestão"
+                itens={[
+                  { nome: "Inicio", icone: "home-outline", link: "../home/page" },
+                  { nome: "Pessoas", icone: "people", link: "../peoples/page" },
+                ]}
 
-          {/* Conteúdo principal */}
-          <View className="flex-1">
-            <Stack screenOptions={{ headerShown: false }} />
+              />
+              <SideBarCategory
+                titulo="Pós-Evento"
+                itens={[
+                  { nome: "Certificados", icone: "map", link: "../certificate/page" },
+                ]}
+              />
+              <SideBarCategory
+                titulo="Geral"
+                itens={[
+                  { nome: "Configuração", icone: "settings-outline", link: "../settings/page" },
+                ]}
+              />
+            </SideBar>
+
+            {/* Conteúdo principal */}
+            <View className="flex-1">
+              <Stack screenOptions={{ headerShown: false }} />
+            </View>
           </View>
         </View>
-      </View>
-    </ThemeProvider>
+      </ThemeProvider>
+    </EventosModalProvider>
   );
 }
 

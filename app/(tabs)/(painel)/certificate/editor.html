@@ -112,6 +112,7 @@
       <option value="{{NOME}}">Nome do Participante</option>
       <option value="{{ATIVIDADE}}">Nome da Atividade</option>
       <option value="{{ASSINATURA}}">Assinatura</option>
+      <option value="{{CODIGO}}">Código do Certificado</option>
     </select>
   </div>
 
@@ -179,12 +180,12 @@
   <div id="templatesPanel">
     <h4>Modelos</h4>
     <div id="templates">
-      <img src="/SICAD/assets/certificados/Certificado_1.png" alt="Template 1"
-        onclick="setTemplate('/SICAD/assets/certificados/Certificado_1.png')">
-      <img src="/SICAD/assets/certificados/Certificado_2.png" alt="Template 2" onclick="setTemplate('/SICAD/assets/certificados/Certificado_2.png')">
-      <img src="/SICAD/assets/certificados/Certificado_3.png" alt="Template 3" onclick="setTemplate('/SICAD/assets/certificados/Certificado_3.png')">
-      <img src="/SICAD/assets/certificados/Certificado_4.png" alt="Template 4" onclick="setTemplate('/SICAD/assets/certificados/Certificado_4.png')">
+      <img src="/SICAD/assets/certificados/Certificado_1.png" alt="Template 1" onclick="setTemplate(this.src)">
+      <img src="/SICAD/assets/certificados/Certificado_2.png" alt="Template 2" onclick="setTemplate(this.src)">
+      <img src="/SICAD/assets/certificados/Certificado_3.png" alt="Template 3" onclick="setTemplate(this.src)">
+      <img src="/SICAD/assets/certificados/Certificado_4.png" alt="Template 4" onclick="setTemplate(this.src)">
     </div>
+
   </div>
 
   <script>
@@ -345,7 +346,7 @@
       });
     }
 
-  
+
 
     // ===== Salvamento =====
     const params = new URLSearchParams(window.location.search);
@@ -357,9 +358,9 @@
       localStorage.setItem('savedCanvas', jsonString);
 
       const previewImage = canvas.toDataURL({
-      format: 'png',
-      multiplier: 3
-    });
+        format: 'png',
+        multiplier: 3
+      });
 
       fetch('http://192.168.1.9/SICAD/salvarTemplate.php', {
         method: 'POST',
