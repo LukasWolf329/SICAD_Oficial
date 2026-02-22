@@ -37,7 +37,7 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await axios.post("http://192.168.2.110/../../../controller/reset_password.php", {
+      const response = await axios.post("http://192.168.2.110/controller/reset_password.php", {
         token: token,
         password: senha,
       });

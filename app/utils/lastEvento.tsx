@@ -12,13 +12,13 @@ export async function getLastEventoId(userId?: string | null) {
   return value ? Number(value) : null;
 }
 
-// ✅ NOVO: salvar nome do evento
+
 export async function setLastEventoNome(eventoNome: string, userId?: string | null) {
   const key = userId ? `lastEventoNome:${userId}` : "lastEventoNome";
   await AsyncStorage.setItem(key, eventoNome);
 }
 
-// ✅ NOVO: obter nome do evento
+
 export async function getLastEventoNome(userId?: string | null) {
   const key = userId ? `lastEventoNome:${userId}` : "lastEventoNome";
   const value = await AsyncStorage.getItem(key);
