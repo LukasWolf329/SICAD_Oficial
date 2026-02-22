@@ -46,7 +46,7 @@ export default function Signup() {
     }
 
     try {
-      const res = await fetch("http://192.168.2.110/SICAD/cadastro.php", {
+      const res = await fetch("http://192.168.2.110/../../../controller/cadastro.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, email, senha }), // c_senha não é usada no PHP

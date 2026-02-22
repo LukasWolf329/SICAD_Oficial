@@ -39,7 +39,7 @@ export default function Login() {
     }
 
     try {
-      const response = await axios.post("http://192.168.2.110/SICAD/login.php",
+      const response = await axios.post("http://192.168.2.110/../../../controller/login.php",
         {
           email: email,
           senha: senha,
@@ -73,7 +73,7 @@ export default function Login() {
     }
 
     try {
-      const response = await axios.post("http://192.168.2.110/SICAD/forgot_password.php", {
+      const response = await axios.post("http://192.168.2.110/../../../controller/forgot_password.php", {
         email: email,
       });
 
