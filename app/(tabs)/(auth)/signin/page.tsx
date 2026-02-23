@@ -8,8 +8,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 import "../../../../style/global.css";
 
-const BASE_URL = "http://192.168.2.110";
-
 export default function Login() {
   useAuthCheck();
 
@@ -46,28 +44,17 @@ export default function Login() {
     setAlertVisible(true);
   }
 
-  async function handleSignIn() {
-    if (!email || !senha) {
-      showError("Por favor, preencha todos os campos");
-      return;
-    }
-<<<<<<< HEAD
-    
-    try {
-      const response = await axios.post("http://192.168.1.9z/SICAD/login.php",
-        {
-          email: email,
-          senha: senha,
-        },
-      );
-=======
->>>>>>> a5e11700cd5913e103f32c8e8dc73f9f036bbcaf
+async function handleSignIn() {
+  if (!email || !senha) {
+    showError("Por favor, preencha todos os campos");
+    return;
+  }
 
-    try {
-      const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
-        email,
-        senha,
-      });
+  try {
+    const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
+      email,
+      senha,
+    });
 
       if (response.data?.success) {
         const token = response.data.token;
@@ -194,8 +181,7 @@ export default function Login() {
                     value={email}
                     onChangeText={setEmail}
                     returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => senhaInputRef.current?.focus()} // <- era .focus sem chamar
+                    onSubmitEditing={() => senhaInputRef.current?.focus()}
                     className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
                   />
                 </SafeAreaView>
@@ -231,7 +217,7 @@ export default function Login() {
             <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
           </Pressable>
 
-          <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
+          <Link href="/(tabs)/(painel)/home/page" className="dark:color-white underline text-xl mt-2">
             Já tenho o token / redefinir senha
           </Link>
         </View>
