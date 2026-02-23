@@ -37,7 +37,7 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await axios.post("http://localhost/SICAD_Oficial/controller/reset_password.php", {
+      const response = await axios.post("../../../../controller/reset_password.php", {
         token: token,
         password: senha,
       });
