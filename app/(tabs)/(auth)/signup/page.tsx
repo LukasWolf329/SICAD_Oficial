@@ -8,7 +8,7 @@ import { Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } fro
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 
-
+//teste de commit
 
 export default function Signup() {
   const [nome, setNome] = React.useState("");
