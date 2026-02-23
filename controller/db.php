@@ -1,14 +1,14 @@
 <?php
-$servername = 'localhost';
-$username = 'root';
-$password = 'lukas193';
-$dbname = 'sicad';
+$servername = '172.30.0.11';
+$username = 'sicad';
+$password = 'lwuKK79l34ZnWPeG';
+$dbname = 'SICAD';
 
-// Criar conexão
+
 $conn = new mysqli($servername, $username, $password, $dbname);
 
-// Verificar conexão
+
 if ($conn->connect_error) {
-    // Se houve erro na conexão
+    
     die("Falha na conexão: " . $conn->connect_error);
 }
