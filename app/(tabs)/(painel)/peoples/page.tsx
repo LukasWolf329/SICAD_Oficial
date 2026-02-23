@@ -30,9 +30,62 @@
       formData.append('arquivo', file);
       formData.append('atividade_id', eventoId);
 
+<<<<<<< HEAD
       await fetch('../../../../SICAD_Oficial/controller/importar_participantes.php', {
         method: 'POST',
         body: formData
+=======
+      if (lastEventoId) {
+        router.replace({
+          pathname: "/(tabs)/(painel)/peoples/page",
+          params: { id: lastEventoId },
+        });
+      }
+    })();
+  }, [rawId]);
+
+  // 2) salva como último evento quando tiver id válido
+  useEffect(() => {
+    (async () => {
+      if (!rawId || Number.isNaN(eventoId)) return;
+
+      const userId = await AsyncStorage.getItem("userId");
+      const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
+      await AsyncStorage.setItem(key, String(eventoId));
+    })();
+  }, [rawId, eventoId]);
+
+  // 3) fetch do backend DEPENDENDO do eventoId
+  useEffect(() => {
+    if (!rawId || Number.isNaN(eventoId)) return;
+
+    const controller = new AbortController();
+
+    fetch("http://192.168.2.110/controller/people.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evento_id: eventoId }),
+      signal: controller.signal,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // se o seu PHP devolver { pessoas: [...], evento_nome: "..." }
+        if (Array.isArray(data?.pessoas)) {
+          setPessoas(data.pessoas);
+        } else {
+          // se devolver direto um array
+          setPessoas(Array.isArray(data) ? data : []);
+        }
+        if (typeof data?.evento_nome === "string" && data.evento_nome.trim() !== "") {
+          setEventoNome(data.evento_nome);
+        }
+
+      })
+      .catch((err) => {
+        if (err?.name !== "AbortError") {
+          console.error("Erro ao carregar pessoas:", err);
+        }
+>>>>>>> a5e11700cd5913e103f32c8e8dc73f9f036bbcaf
       });
 
       alert("Importação concluída!");

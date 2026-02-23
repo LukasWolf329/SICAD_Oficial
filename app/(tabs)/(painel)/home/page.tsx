@@ -8,6 +8,7 @@ import { Mainframe, NavBar, SideBar, SideBarCategory } from '../../../../compone
 import { InfoBox } from "@/components/InfoBox";
 import { useLocalSearchParams, router } from "expo-router";
 import { setLastEventoId, setLastEventoNome } from "../../../utils/lastEvento";
+import { useEventosModal } from "@/components/NavBar/EventosModalContext";
 
 export default function HomePage() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -19,25 +20,34 @@ export default function HomePage() {
   const [totalCertificados, setTotalCertificados] = useState(0);
   const [eventoNome, setEventoNome] = useState("Evento");
 
+  const {openEventos} = useEventosModal();
   // 1) Se entrou aqui sem id, tenta recuperar do storage e redireciona
   useEffect(() => {
-    (async () => {
-      if (rawId) return;
+  let ativo = true;
 
-      const userId = await AsyncStorage.getItem("userId");
-      const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
-      const lastEventoId = await AsyncStorage.getItem(key);
+  (async () => {
+    if (rawId) return;
 
-      if (lastEventoId) {
-        router.replace({
-          pathname: "/(tabs)/(painel)/home/page",
-          params: { id: lastEventoId },
-        });
-      } else {
-        router.replace("/(tabs)/(painel)/home/page"); // ajuste para sua rota real
-      }
-    })();
-  }, [rawId]);
+    const userId = await AsyncStorage.getItem("userId");
+    const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
+    const lastEventoId = await AsyncStorage.getItem(key);
+
+    if (!ativo) return;
+
+    if (lastEventoId) {
+      router.replace({
+        pathname: "/(tabs)/(painel)/home/page",
+        params: { id: lastEventoId },
+      });
+    } else {
+      openEventos(); // ✅ aqui abre o modal da navbar
+    }
+  })();
+
+  return () => {
+    ativo = false;
+  };
+}, [rawId, openEventos]);
 
   // 2) Sempre que tiver id válido, salva como "último evento"
   useEffect(() => {
@@ -56,7 +66,7 @@ export default function HomePage() {
 
     const controller = new AbortController();
 
-    fetch("http://192.168.1.9/SICAD/page-org.php", {
+    fetch("http://192.168.2.110/controller/page-org.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),

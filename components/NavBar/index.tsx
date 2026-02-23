@@ -14,6 +14,7 @@ import {
   TextInput,
   View
 } from 'react-native';
+import { useEventosModal } from './EventosModalContext';
 
 /* ------------------------------------------------------
    TIPAGENS
@@ -35,7 +36,7 @@ export function NavBar() {
 
   const [nome, setNome] = useState("");
   const [evento, setEvento] = useState<Evento[]>([]);
-  const [showEventos, setShowEventos] = useState(false);
+  const { showEventos, openEventos, closeEventos } = useEventosModal();
   const [showPerfil, setShowPerfil] = useState(false);
 
   /* ---------------- Carregar nome do usuário ---------------- */
@@ -57,7 +58,7 @@ export function NavBar() {
         const userId = await AsyncStorage.getItem("userId");
 
         const response = await fetch(
-          "http://192.168.1.9/SICAD/get_dropdown_eventos.php",
+          "http://192.168.2.110/controller/get_dropdown_eventos.php",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -78,16 +79,15 @@ export function NavBar() {
 
   /* ---------------- Abrir evento com params ---------------- */
   async function abrirEvento(eventoId: number) {
-    setShowEventos(false);
+    closeEventos();
 
     const userId = await AsyncStorage.getItem("userId");
-    const key = userId ? `lastEventoId${userId}` : "lastEventoId";
-
+    const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
     await AsyncStorage.setItem(key, String(eventoId));
-    
-    router.push({
+
+    router.replace({
       pathname: "/(tabs)/(painel)/home/page",
-      params: { id: eventoId },
+      params: { id: String(eventoId) },
     });
   }
 
@@ -106,7 +106,7 @@ export function NavBar() {
       <View className="flex-row items-center gap-6">
 
         {/* Botão Meus eventos */}
-        <Pressable onPress={() => setShowEventos(true)} className="flex-row items-center">
+        <Pressable onPress={openEventos} className="flex-row items-center">
           <Text className="text-white text-base">Meus eventos </Text>
           <Ionicons name="caret-down-outline" size={20} color="white" />
         </Pressable>
@@ -131,7 +131,7 @@ export function NavBar() {
       </View>
 
       {/* ---------------- MODAL MEUS EVENTOS ---------------- */}
-      <Modal visible={showEventos} animationType="fade" transparent onRequestClose={() => setShowEventos(false)}>
+      <Modal visible={showEventos} animationType="fade" transparent onRequestClose={closeEventos}>
         <View className="flex-1 bg-black/40 justify-center items-center">
           <View className="w-11/12 md:w-2/3 bg-white rounded-2xl shadow-xl max-h-[80%]">
 
@@ -139,7 +139,7 @@ export function NavBar() {
             <View className="bg-[#2192FF] rounded-t-2xl flex-row justify-between items-center px-4 py-3">
               <Ionicons name="browsers-outline" size={22} color="#fff" />
               <Text className="text-white text-lg font-semibold">Meus Eventos</Text>
-              <Pressable onPress={() => setShowEventos(false)}>
+              <Pressable onPress={closeEventos}>
                 <Ionicons name="close-outline" size={24} color="#fff" />
               </Pressable>
             </View>
@@ -218,7 +218,7 @@ export function NavBar() {
             <Pressable className="p-3 mt-2 flex-row items-center">
               <Text className="font-semibold">Meus Materiais</Text>
             </Pressable>
-            
+
             <Pressable onPress={logout} className="border-t p-3 mt-2 flex-row items-center rounded-b-2xl">
               <Ionicons name="log-out-outline" size={20} />
               <Text className="font-semibold ml-2">Sair</Text>
@@ -257,9 +257,8 @@ export function SideBar({ children }: { children?: React.ReactNode }) {
 
       {isOpen && (
         <View
-          className={`h-full p-4 ${
-            isSmall ? "absolute left-0 top-0 w-[70%] z-10 shadow-lg bg-white" : "w-[250px]"
-          }`}
+          className={`h-full p-4 ${isSmall ? "absolute left-0 top-0 w-[70%] z-10 shadow-lg bg-white" : "w-[250px]"
+            }`}
         >
           {children}
         </View>

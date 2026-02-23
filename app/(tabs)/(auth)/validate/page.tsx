@@ -1,13 +1,11 @@
 
-import "../../../../style/global.css";
 import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React from 'react';
 import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
-import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
-import { authCheck } from "@/app/authCheck/authCheck";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
+import "../../../../style/global.css";
 
 export default function Login() {
 
@@ -60,7 +58,7 @@ export default function Login() {
     setLoading(true);
     try {
       // Pode ser GET com params (mais simples)
-      const { data } = await axios.get("http://192.168.1.9/SICAD/validar_certificado.php", {
+      const { data } = await axios.get("http://192.168.2.110/SICAD/validar_certificado.php", {
         params: { codigo: codigoFormatado },
         timeout: 15000,
       });
