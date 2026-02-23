@@ -58,7 +58,7 @@ export default function Login() {
     setLoading(true);
     try {
       // Pode ser GET com params (mais simples)
-      const { data } = await axios.get("http://192.168.2.110/controller/validar_certificado.php", {
+      const { data } = await axios.get("http://192.168.2.110/SICAD/validar_certificado.php", {
         params: { codigo: codigoFormatado },
         timeout: 15000,
       });

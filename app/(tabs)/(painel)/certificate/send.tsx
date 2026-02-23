@@ -49,7 +49,7 @@ export default function SendCerticate() {
         setEventoId(lastId);
 
         // (Opcional) pegar nome do evento pra mostrar no Mainframe
-        const res = await fetch("http://192.168.1.9/controller/page-org.php", {
+        const res = await fetch("http://192.168.2.110/controller/page-org.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ evento_id: lastId }),

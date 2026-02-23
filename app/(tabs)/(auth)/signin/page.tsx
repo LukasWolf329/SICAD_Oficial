@@ -1,20 +1,20 @@
-
 import { useAuthCheck } from "@/app/useAuthCheck/useAuthCheck";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Link, useRouter } from "expo-router";
-import React from 'react';
-import { Image, Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
+import React from "react";
+import { Image, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 import "../../../../style/global.css";
 
-export default function Login() {
+const BASE_URL = "http://192.168.2.110";
 
+export default function Login() {
   useAuthCheck();
 
-  const [email, setEmail] = React.useState('');
-  const [senha, setSenha] = React.useState('');
+  const [email, setEmail] = React.useState("");
+  const [senha, setSenha] = React.useState("");
 
   const senhaInputRef = React.useRef<TextInput | null>(null);
 
@@ -22,47 +22,107 @@ export default function Login() {
   const [alertMessage, setAlertMessage] = React.useState("");
   const [alertTitle, setAlertTitle] = React.useState("Ocorreu um erro");
 
+  // NOVO: modo verificação
+  const [alertVariant, setAlertVariant] = React.useState<"error" | "info" | "success">("error");
+  const [needVerify, setNeedVerify] = React.useState(false);
+  const [verifyToken, setVerifyToken] = React.useState("");
+  const [verifying, setVerifying] = React.useState(false);
+
   const router = useRouter();
 
   function showError(message: string, title = "Ocorreu um erro") {
+    setAlertVariant("error");
+    setNeedVerify(false);
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertVisible(true);
+  }
+
+  function showVerify(message: string, title = "Verifique seu e-mail") {
+    setAlertVariant("info");
+    setNeedVerify(true);
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertVisible(true);
   }
 
   async function handleSignIn() {
-    console.log('Login com:', { email, senha });
-    // Redireciona para a página de perfil após o login
     if (!email || !senha) {
-      showError('Por favor, preencha todos os campos');
+      showError("Por favor, preencha todos os campos");
       return;
     }
 
     try {
-      const response = await axios.post("http://192.168.2.110/controller/login.php",
-        {
-          email: email,
-          senha: senha,
-        },
-      );
+      const response = await axios.post("http://192.168.2.110/SICAD/login.php", {
+        email,
+        senha,
+      });
 
-      console.log("Resposta do Backend: ", response.data);
-      if (response.data.success) {
+      if (response.data?.success) {
         const token = response.data.token;
         const nome = response.data.usuario.nome;
         const id = response.data.usuario.id;
+
         await AsyncStorage.setItem("userToken", token);
         await AsyncStorage.setItem("userName", nome);
-        await AsyncStorage.setItem("userId", id);
+        await AsyncStorage.setItem("userId", String(id)); // <- string
+
         router.push("/(tabs)/(painel)/home/page");
+        return;
       }
-      else {
-        setAlertMessage(response.data.message);
-        setAlertVisible(true);
-        console.log(response.data.message || "Credenciais Invalidas");
+
+      // AQUI: se não verificado, abre o modal com input
+      if (response.data?.code === "EMAIL_NOT_VERIFIED") {
+        setVerifyToken("");
+        showVerify(response.data?.message ?? "Seu e-mail não foi verificado. Cole o token aqui.");
+        return;
       }
+
+      // erro normal
+      showError(response.data?.message ?? "Credenciais inválidas");
     } catch (error) {
       console.error("Erro na requisicao: ", error);
+      showError("Erro de conexão. Tente novamente.");
+    }
+  }
+
+  // NOVO: validar token
+  async function handleVerifyEmail() {
+    const token = verifyToken.trim();
+    if (!token) return;
+
+    setVerifying(true);
+    try {
+      const res = await axios.post("http://192.168.2.110/SICAD/verify_email.php", {
+        email,
+        token,
+      });
+
+      if (res.data?.success) {
+        // fecha modal e tenta login de novo
+        setAlertVisible(false);
+        setNeedVerify(false);
+        setVerifying(false);
+
+        await handleSignIn();
+        return;
+      }
+
+      // mantém modal aberto, só mostra mensagem de erro
+      setAlertVariant("error");
+      setNeedVerify(true);
+      setAlertTitle("Token inválido");
+      setAlertMessage(res.data?.message ?? "Token inválido ou expirado.");
+      setAlertVisible(true);
+    } catch (e) {
+      console.error(e);
+      setAlertVariant("error");
+      setNeedVerify(true);
+      setAlertTitle("Erro de conexão");
+      setAlertMessage("Não foi possível validar agora. Tente novamente.");
+      setAlertVisible(true);
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -74,13 +134,15 @@ export default function Login() {
 
     try {
       const response = await axios.post("http://192.168.2.110/controller/forgot_password.php", {
-        email: email,
+        email,
       });
 
       if (response.data?.success) {
-        showError(response.data.message, "Verifique seu e-mail");
-        // opcional: levar pra tela de redefinir
-        // router.push("/(tabs)/(auth)/reset-password/page");
+        setAlertVariant("info");
+        setNeedVerify(false);
+        setAlertTitle("Verifique seu e-mail");
+        setAlertMessage(response.data.message);
+        setAlertVisible(true);
       } else {
         showError(response.data?.message ?? "Não foi possível enviar o e-mail.");
       }
@@ -93,50 +155,91 @@ export default function Login() {
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
       <View id="aside" className=" w-5/12">
-        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden" />
+        <Image
+          source={require("../../../../assets/images/side-view-login-cadastro.png")}
+          style={{ width: "100%" }}
+          className=" mobile:h-0 mobile:w-0 mobile:hidden"
+        />
       </View>
+
       <View className="flex-1 items-center justify-center">
         <View>
-          <Image source={require('../../../../assets/images/logo-composta.png')} className="mb-4" />
+          <Image source={require("../../../../assets/images/logo-composta.png")} className="mb-4" />
           <Text className="text-6xl dark:color-white">Acesse sua conta</Text>
-          <Text className="text-2xl dark:color-white">Ainda não tem uma conta ? <Link href={'/(tabs)/(auth)/signup/page'} className="text-2xl color-sky-500">clique aqui para criar uma </Link></Text>
+
+          <Text className="text-2xl dark:color-white">
+            Ainda não tem uma conta ?{" "}
+            <Link href={"/(tabs)/(auth)/signup/page"} className="text-2xl color-sky-500">
+              clique aqui para criar uma
+            </Link>
+          </Text>
+
           <form action="" className="flex flex-col gap-1 mt-4">
             <View>
               <Text className="text-2xl dark:color-white">E-mail</Text>
               <SafeAreaProvider>
                 <SafeAreaView>
-                  <TextInput value={email} onChangeText={setEmail} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => senhaInputRef.current?.focus} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => senhaInputRef.current?.focus()} // <- era .focus sem chamar
+                    className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                  />
                 </SafeAreaView>
               </SafeAreaProvider>
             </View>
+
             <View>
               <Text className="text-2xl dark:color-white">Senha</Text>
               <SafeAreaProvider>
                 <SafeAreaView>
-                  <TextInput secureTextEntry={true} value={senha} onChangeText={setSenha} ref={senhaInputRef} returnKeyType="go" onSubmitEditing={() => handleSignIn()} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                  <TextInput
+                    secureTextEntry={true}
+                    value={senha}
+                    onChangeText={setSenha}
+                    ref={senhaInputRef}
+                    returnKeyType="go"
+                    onSubmitEditing={handleSignIn}
+                    className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
+                  />
                 </SafeAreaView>
               </SafeAreaProvider>
             </View>
-            <Pressable onPress={handleSignIn} className="w-full h-12 rounded-xl bg-green-600 text-2xl font-bold mt-4 color-white justify-center items-center">Entrar</Pressable>
+
+            <Pressable
+              onPress={handleSignIn}
+              className="w-full h-12 rounded-xl bg-green-600 text-2xl font-bold mt-4 color-white justify-center items-center"
+            >
+              Entrar
+            </Pressable>
           </form>
+
           <Pressable onPress={handleForgotPassword}>
-            <Text className="dark:color-white underline text-xl mt-4">
-              Esqueceu sua senha ?
-            </Text>
+            <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
           </Pressable>
+
           <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
             Já tenho o token / redefinir senha
           </Link>
         </View>
       </View>
+
       <NiceAlert
         visible={alertVisible}
         title={alertTitle}
         message={alertMessage}
         onClose={() => setAlertVisible(false)}
+        variant={alertVariant}
+        showInput={needVerify}
+        inputPlaceholder="Cole o token aqui"
+        inputValue={verifyToken}
+        onChangeInput={setVerifyToken}
+        confirmText={verifying ? "Validando..." : "Validar"}
+        onConfirm={needVerify ? handleVerifyEmail : undefined}
+        confirmDisabled={needVerify ? verifying || verifyToken.trim().length === 0 : false}
       />
     </View>
   );
 }
-
-
