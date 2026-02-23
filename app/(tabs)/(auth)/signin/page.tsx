@@ -64,7 +64,7 @@ export default function Login() {
 >>>>>>> a5e11700cd5913e103f32c8e8dc73f9f036bbcaf
 
     try {
-      const response = await axios.post("http://192.168.2.110/SICAD/login.php", {
+      const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
         email,
         senha,
       });

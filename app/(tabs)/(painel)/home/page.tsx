@@ -66,7 +66,7 @@ export default function HomePage() {
 
     const controller = new AbortController();
 
-    fetch("http://192.168.2.110/controller/page-org.php", {
+    fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),
