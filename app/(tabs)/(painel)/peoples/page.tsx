@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Text, View, ScrollView, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Mainframe, PeopleBox } from "@/components/InfoBox";
+import { Mainframe} from '../../../../components/NavBar';
 
 import { useLocalSearchParams, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -28,6 +28,7 @@ import * as DocumentPicker from 'expo-document-picker';
     const [showActions, setShowActions] = useState(false);
 
     const exportarCSV = () => {
+      console.log("Evento ID:", eventoId);
       if (!eventoId || Number.isNaN(eventoId)) return;
 
       window.open(
@@ -111,7 +112,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
       const controller = new AbortController();
 
-      fetch("../../../../SICAD_Oficial/people.php", {
+      fetch("http://localhost/SICAD_Oficial/controller/people.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ evento_id: eventoId }),
@@ -155,18 +156,39 @@ import * as DocumentPicker from 'expo-document-picker';
       <ScrollView className="flex-1 dark:bg-[#121212]">
 
         <Mainframe name={eventoNome} link="www.evento.com">
-          <View className="px-8 relative">
+          <View className="px-8">
             <Text className="text-2xl dark:color-white">Pessoas</Text>
             <View className="flex-row items-center justify-between mt-4">
-              <View className="flex-row items-center gap-2 mt-2">
-                <Pressable className="w-40 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="add" size={22} />Adicionar Pessoa</Pressable>
-                <Pressable className="w-40 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"><Ionicons name="mail-outline" size={22} />Notificar Pessoa</Pressable>
-                <Pressable className="w-20 flex-row border border-slate-500 rounded-lg justify-center items-center p-1" onPress={() => setShowActions(!showActions)}><Ionicons name="chevron-down-outline" size={22}/>Ações</Pressable>
+              <View className="flex-row items-center gap-2 mt-2 relative">
+                <Pressable className="w-40 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1">
+                  <Ionicons name="add" size={22} />
+                  <Text className="ml-1">Adicionar Pessoa</Text>
+                </Pressable>
 
+                <Pressable className="w-40 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1">
+                  <Ionicons name="mail-outline" size={22} />
+                  <Text className="ml-1">Notificar Pessoa</Text>
+                </Pressable>
+
+                <Pressable className="w-20 flex-row border border-slate-500 rounded-lg justify-center items-center p-1" onPress={() => setShowActions(!showActions)}>
+                  <Ionicons name="chevron-down-outline" size={22} />
+                  <Text className="ml-1">Ações</Text>
+                </Pressable>
                 {showActions && (
-                  <View className="absolute bg-white border rounded mt-2 p-2 z-50">
-                    <Pressable onPress={exportarCSV}><Text>Exportar CSV</Text></Pressable>
-                    <Pressable onPress={importarCSV}><Text>Importar CSV</Text></Pressable>
+                  <View className="absolute top-12 right-0 bg-white border rounded p-2 z-50 shadow-md">
+                    <Pressable 
+                      onPress={() => { exportarCSV(); setShowActions(false); }}
+                      className="p-2"
+                    >
+                      <Text>Exportar CSV</Text>
+                    </Pressable>
+
+                    <Pressable 
+                      onPress={() => { importarCSV(); setShowActions(false); }}
+                      className="p-2"
+                    >
+                      <Text>Importar CSV</Text>
+                    </Pressable>
                   </View>
                 )}
               </View>

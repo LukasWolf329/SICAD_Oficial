@@ -51,5 +51,4 @@
     }
 
     echo json_encode(["status" => "ok"]);
-    setShowActions(false);
 ?>

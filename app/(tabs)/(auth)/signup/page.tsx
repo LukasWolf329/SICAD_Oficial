@@ -54,7 +54,7 @@ export default function Signup() {
     }
 
     try {
-      const res = await fetch("../../../../controller/cadastro.php", {
+      const res = await fetch("http://localhost/SICAD_Oficial/controller/cadastro.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, email, senha }),
@@ -88,7 +88,7 @@ export default function Signup() {
     if (!t) return;
 
     try {
-      const res = await fetch("../../../../controller/verify_email.php", {
+      const res = await fetch("http://localhost/SICAD_Oficial/controller/verify_email.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, token: t }),
@@ -109,7 +109,7 @@ export default function Signup() {
 
       if (data?.success) {
         // ✅ opção 1 (melhor UX): logar automaticamente após validar
-        const loginResp = await axios.post("../../../../controller/login.php", { email, senha });
+        const loginResp = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", { email, senha });
         if (loginResp.data?.success) {
           const tokenJwt = loginResp.data.token;
           const nomeUser = loginResp.data.usuario.nome;
@@ -157,52 +157,50 @@ export default function Signup() {
       </View>
 
       <View className="flex-1 items-center justify-center">
-        <ScrollView>
-          <View>
-            <Image source={require("../../../../assets/images/logo-composta.png")} className="mb-4" />
-            <Text className="text-6xl dark:color-white">Crie sua conta</Text>
+        <View>
+          <Image source={require("../../../../assets/images/logo-composta.png")} className="mb-4" />
+          <Text className="text-6xl dark:color-white">Crie sua conta</Text>
 
-            <Text className="text-2xl dark:color-white">
-              Ja tem uma conta ?{" "}
-              <Link href={"../signin/page"} className="text-2xl color-sky-500">
-                clique aqui para fazer login
-              </Link>
-            </Text>
+          <Text className="text-2xl dark:color-white">
+            Ja tem uma conta ?{" "}
+            <Link href={"../signin/page"} className="text-2xl color-sky-500">
+              clique aqui para fazer login
+            </Link>
+          </Text>
 
-            <SafeAreaProvider>
-              <SafeAreaView>
-                <View className="flex flex-col gap-1 mt-4">
-                  <View>
-                    <Text className="text-2xl dark:color-white">Nome Completo</Text>
-                    <TextInput value={nome} onChangeText={setNome} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
-                  </View>
-
-                  <View>
-                    <Text className="text-2xl dark:color-white">E-mail</Text>
-                    <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
-                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
-                  </View>
-
-                  <View>
-                    <Text className="text-2xl dark:color-white">Senha</Text>
-                    <TextInput secureTextEntry value={senha} onChangeText={setSenha}
-                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
-                  </View>
-
-                  <View>
-                    <Text className="text-2xl dark:color-white">Confirmar Senha</Text>
-                    <TextInput secureTextEntry value={c_senha} onChangeText={setCSenha}
-                      className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
-                  </View>
-
-                  <Pressable onPress={handleSignUp} className="w-full h-12 rounded-xl bg-green-600 mt-4 justify-center items-center">
-                    <Text className="text-2xl font-bold color-white">Criar conta</Text>
-                  </Pressable>
+          <SafeAreaProvider>
+            <SafeAreaView>
+              <View className="flex flex-col gap-1 mt-4">
+                <View>
+                  <Text className="text-2xl dark:color-white">Nome Completo</Text>
+                  <TextInput value={nome} onChangeText={setNome} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
                 </View>
-              </SafeAreaView>
-            </SafeAreaProvider>
-          </View>
-        </ScrollView>
+
+                <View>
+                  <Text className="text-2xl dark:color-white">E-mail</Text>
+                  <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
+                    className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                </View>
+
+                <View>
+                  <Text className="text-2xl dark:color-white">Senha</Text>
+                  <TextInput secureTextEntry value={senha} onChangeText={setSenha}
+                    className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                </View>
+
+                <View>
+                  <Text className="text-2xl dark:color-white">Confirmar Senha</Text>
+                  <TextInput secureTextEntry value={c_senha} onChangeText={setCSenha}
+                    className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
+                </View>
+
+                <Pressable onPress={handleSignUp} className="w-full h-12 rounded-xl bg-green-600 mt-4 justify-center items-center">
+                  <Text className="text-2xl font-bold color-white">Criar conta</Text>
+                </Pressable>
+              </View>
+            </SafeAreaView>
+          </SafeAreaProvider>
+        </View>
       </View>
 
       <NiceAlert

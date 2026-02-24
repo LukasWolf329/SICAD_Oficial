@@ -49,7 +49,7 @@ export default function SendCerticate() {
         setEventoId(lastId);
 
         // (Opcional) pegar nome do evento pra mostrar no Mainframe
-        const res = await fetch("http://192.168.2.110/controller/page-org.php", {
+        const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ evento_id: lastId }),
@@ -79,7 +79,7 @@ export default function SendCerticate() {
     setLoadingCertificados(true);
 
     
-    fetch(`http://192.168.2.110/controller/get_certificado.php?t=${Date.now()}`, {
+    fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),
@@ -127,7 +127,7 @@ export default function SendCerticate() {
   };
 
   const handleSendOne = async (cod_certificado: number) => {
-    const res = await fetch("http://192.168.2.110/controller/enviar_certificado.php", {
+    const res = await fetch("http://localhost/SICAD_Oficial/controller/enviar_certificado.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cod_certificado }),

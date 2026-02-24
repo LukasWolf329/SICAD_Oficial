@@ -51,7 +51,7 @@ async function handleSignIn() {
   }
 
   try {
-    const response = await axios.post("../../../../controller/login.php", {
+    const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
       email,
       senha,
     });
@@ -91,7 +91,7 @@ async function handleSignIn() {
 
     setVerifying(true);
     try {
-      const res = await axios.post("../../../../controller/verify_email.php", {
+      const res = await axios.post("http://localhost/SICAD_Oficial/controller/verify_email.php", {
         email,
         token,
       });
@@ -131,7 +131,7 @@ async function handleSignIn() {
     }
 
     try {
-      const response = await axios.post("../../../../controller/forgot_password.php", {
+      const response = await axios.post("http://localhost/SICAD_Oficial/controller/forgot_password.php", {
         email,
       });
 

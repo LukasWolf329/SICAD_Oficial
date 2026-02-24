@@ -25,6 +25,5 @@
     }
 
     fclose($output);
-    setShowActions(false);
     exit;
 ?>

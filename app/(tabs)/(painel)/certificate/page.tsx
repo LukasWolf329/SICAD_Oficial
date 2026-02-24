@@ -46,7 +46,7 @@ export default function Certicate() {
 
         // (Opcional) Buscar nome do evento pra mostrar no Mainframe
         // Se você já tem um endpoint melhor, use ele.
-        const res = await fetch("http://192.168.2.110/controller/page-org.php", {
+        const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ evento_id: lastId }),
@@ -75,7 +75,7 @@ export default function Certicate() {
     const controller = new AbortController();
     setLoadingCertificados(true);
 
-    fetch("http://192.168.2.110/controller/certificado.php", {
+    fetch("http://localhost/SICAD_Oficial/controller/certificado.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),
