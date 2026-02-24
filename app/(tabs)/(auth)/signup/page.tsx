@@ -7,8 +7,8 @@ import React from "react";
 import { Image, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
+import { useEffect } from "react";
 
-//teste de commit
 
 export default function Signup() {
   const [nome, setNome] = React.useState("");
@@ -27,6 +27,12 @@ export default function Signup() {
 
   const router = useRouter();
 
+  useEffect(() => { 
+    (async () => {
+      await AsyncStorage.multiRemove(["userToken", "userName", "userId"]);
+    })();
+  }, []);
+
   function showError(message: string, title = "Ocorreu um erro") {
     setAlertVariant("error");
     setAlertTitle(title);
@@ -42,6 +48,7 @@ export default function Signup() {
     setNeedVerify(true);
     setAlertVisible(true);
   }
+
 
   async function handleSignUp() {
     if (!nome || !email || !senha || !c_senha) {
