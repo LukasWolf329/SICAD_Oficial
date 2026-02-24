@@ -58,7 +58,7 @@ export function NavBar() {
         const userId = await AsyncStorage.getItem("userId");
 
         const response = await fetch(
-          "http://192.168.2.110/controller/get_dropdown_eventos.php",
+          "http://localhost/SICAD_Oficial/controller/get_dropdown_eventos.php",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

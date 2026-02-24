@@ -362,7 +362,7 @@
         multiplier: 3
       });
 
-      fetch('http://192.168.2.110/controller/salvarTemplate.php', {
+      fetch('http://localhost/SICAD_Oficial/controller/salvarTemplate.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -384,7 +384,7 @@
         return;
       }
 
-      fetch('http://192.168.2.110/controller/getTemplate.php?atividade_id=' + encodeURIComponent(atividade_id))
+      fetch('http://localhost/SICAD_Oficial/controller/getTemplate.php?atividade_id=' + encodeURIComponent(atividade_id))
         .then(response => response.json())
         .then(data => {
           console.log("Resposta do backend:", data);

@@ -1,29 +1,33 @@
 <?php
-    include 'conexao.php';
+include 'conexao.php';
 
-    $atividade_id = $_GET['atividade_id'];
+if(!isset($_GET['atividade_id'])){
+    die("atividade_id não enviado");
+}
 
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=participantes.csv');
+$atividade_id = intval($_GET['atividade_id']);
 
-    $output = fopen('php://output', 'w');
+header('Content-Type: text/csv; charset=utf-8');
+header('Content-Disposition: attachment; filename=participantes.csv');
 
-    fputcsv($output, ['ID', 'Nome', 'Email', 'CPF', 'Telefone']);
+$output = fopen('php://output', 'w');
 
-    $sql = "SELECT u.ID, u.nome, u.email, u.cpf, u.telefone
-            FROM Usuario u
-            JOIN Participa p ON u.ID = p.fk_Usuario_ID
-            WHERE p.fk_Atividade_ID = ?";
+fputcsv($output, ['ID', 'Nome', 'Email', 'CPF', 'Telefone']);
 
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $atividade_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
+$sql = "SELECT u.ID, u.nome, u.email, u.cpf, u.telefone
+        FROM Usuario u
+        JOIN Participa p ON u.ID = p.fk_Usuario_ID
+        WHERE p.fk_Atividade_ID = ?";
 
-    while ($row = $result->fetch_assoc()) {
-        fputcsv($output, $row);
-    }
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $atividade_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-    fclose($output);
-    exit;
+while ($row = $result->fetch_assoc()) {
+    fputcsv($output, $row);
+}
+
+fclose($output);
+exit;
 ?>

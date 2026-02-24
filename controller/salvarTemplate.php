@@ -35,7 +35,6 @@ try {
   $json = $data['json'];
   $atividade_id = (int) $data['atividade_id'];
 
-  // imagem_src pode vir como URL (http://127...) ou path. Vamos normalizar pra "assets/certificados/xxx.png"
   $imagem_src = $data['imagem_src'] ?? null;
   $imagem_preview = null;
 
