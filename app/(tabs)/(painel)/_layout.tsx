@@ -33,7 +33,7 @@ export default function AppLayout() {
     <EventosModalProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <View className="flex-1 dark:bg-[#121212]">
+        <View className="flex-1 dark:bg-[#121212] dark:text-white">
           <NavBar />
           <View className="flex-1 flex-row">
             <SideBar>

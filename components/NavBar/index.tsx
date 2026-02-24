@@ -296,8 +296,8 @@ export function SideBarCategory({ titulo, itens }: SideBarCategoryProps) {
           className="flex-row items-center mb-4 mx-4"
           onPress={() => router.push(item.link as any)}
         >
-          <Ionicons name={item.icone} size={24} className="mr-2" />
-          <Text className="text-xl ml-2">{item.nome}</Text>
+          <Ionicons name={item.icone} size={24} className="mr-2 dark:color-white" />
+          <Text className="text-xl ml-2 dark:color-white">{item.nome}</Text>
         </Pressable>
       ))}
     </View>
