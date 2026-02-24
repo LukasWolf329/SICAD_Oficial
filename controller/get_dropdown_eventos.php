@@ -31,25 +31,25 @@ SELECT
     CASE
         WHEN g.fk_Usuario_ID IS NOT NULL THEN (
             SELECT COUNT(DISTINCT p2.fk_Usuario_ID)
-            FROM Participa p2
-            JOIN Atividade a2 ON a2.ID = p2.fk_Atividade_ID
+            FROM participa p2
+            JOIN atividade a2 ON a2.ID = p2.fk_Atividade_ID
             WHERE a2.fk_Evento_codigo = e.codigo
         )
         ELSE NULL
     END AS total_participantes
 
-FROM Evento e
+FROM evento e
 
-LEFT JOIN Gerencia g
+LEFT JOIN gerencia g
        ON g.fk_Evento_codigo = e.codigo
-      AND g.fk_Usuario_ID = ?
+      AND g.fk_Usuario_ID = 4
 
-LEFT JOIN Atividade a
+LEFT JOIN atividade a
        ON a.fk_Evento_codigo = e.codigo
 
-LEFT JOIN Participa p
+LEFT JOIN participa p
        ON p.fk_Atividade_ID = a.ID
-      AND p.fk_Usuario_ID = ?
+      AND p.fk_Usuario_ID = 4
 
 WHERE g.fk_Usuario_ID IS NOT NULL
    OR p.fk_Usuario_ID IS NOT NULL

@@ -18,7 +18,7 @@ type Certificado = {
 
 export default function Certicate() {
 
-    const [eventoId, setEventoId] = useState<number | null>(null);
+  const [eventoId, setEventoId] = useState<number | null>(null);
   const [eventoNome, setEventoNome] = useState<string>("Evento");
   const [certificados, setCertificados] = useState<Certificado[]>([]);
   const [loadingEvento, setLoadingEvento] = useState(true);
@@ -32,13 +32,15 @@ export default function Certicate() {
       try {
         const userId = await AsyncStorage.getItem("userId");
 
-        const lastId = await getLastEventoId(userId);
+        const lastIdRaw = await getLastEventoId(userId);
+        const lastId = Number(lastIdRaw);
 
         if (!alive) return;
 
         if (!lastId) {
-          // Se não tiver último evento salvo, manda pra uma tela de seleção
-          router.replace("/(tabs)/(painel)/certificate/page"); // <-- ajuste essa rota
+          setEventoId(null);
+          setEventoNome("Nenhum evento selecionado");
+          setCertificados([]); // garante lista limpa
           return;
         }
 
@@ -108,64 +110,75 @@ export default function Certicate() {
 
   return (
     <ScrollView className="flex-1 dark:bg-black">
-        <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
-            <View className="px-8">
-              <Text className="text-2xl dark:color-white">Certificados</Text>
-                <View className="flex-row items-center justify-between my-2">
-                    <View className="flex-row items-center gap-2 mt-2">
-                        <Pressable
-                          onPress={() => router.push("./page")} // <- chama a rota como função
-                          className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
-                        >
-                          <Ionicons name="add" size={22} />
-                          <Text>Criar</Text>
-                        </Pressable>
+      <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
+        <View className="px-8">
+          <Text className="text-2xl dark:color-white">Certificados</Text>
+          <View className="flex-row items-center justify-between my-2">
+            <View className="flex-row items-center gap-2 mt-2">
+              <Pressable
+                onPress={() => router.push("./page")} // <- chama a rota como função
+                className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+              >
+                <Ionicons name="add" size={22} />
+                <Text>Criar</Text>
+              </Pressable>
 
-                        <Pressable
-                          onPress={() => router.push("./send")}
-                          className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
-                        >
-                          <Ionicons name="mail-outline" size={22} />
-                          <Text className="text-nowrap">Envio por E-mail</Text>
-                        </Pressable>
+              <Pressable
+                onPress={() => router.push("./send")}
+                className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+              >
+                <Ionicons name="mail-outline" size={22} />
+                <Text className="text-nowrap">Envio por E-mail</Text>
+              </Pressable>
 
-                        <Pressable
-                          onPress={() => router.push("./settings")}
-                          className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
-                        >
-                          <Ionicons name="settings-outline" size={22} />
-                          <Text>Configurações</Text>
-                        </Pressable>
-                    </View>
-                  </View>
-                <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-2">
-                  <Text className="text-2xl dark:color-white">Criar Certificados</Text>
-                  <Pressable className="w-min text-nowrap color-white bg-[#2192ff] rounded-lg justify-center items-center p-1 mt-2">Adicionar Certificado</Pressable>
-                </View>
-                <View className='flex-row justify-center items-center border-b border-slate-300 px-4'>
-                  <Text className='w-4/12 font-semibold color-slate-400'>TITULO</Text>
-                  <Text className='w-2/12 font-semibold color-slate-400'>VALOR</Text>
-                  <Text className='w-2/12 font-semibold color-slate-400'>MODELO</Text>
-                  <Text className='w-2/12 font-semibold color-slate-400'>ATRIBUIÇÃO</Text>
-                  <Text className='w-2/12 font-semibold color-slate-400'>STATUS</Text>
-                  <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
-                </View>
-                <View>
-                  {certificados.map((certificado, index) =>
-                    <CertifyBox
-                      key={index}
-                      titulo = {certificado.titulo}
-                      valor = {0}
-                      modelo={"Padrão"}
-                      att = {"Automática"}
-                      status={"Ativo"}
-                      atividade_id={certificado.atividade_id}
-                    />
-                  )}
-                </View>
-                
+              <Pressable
+                onPress={() => router.push("./settings")}
+                className="w-min px-3 flex-row bg-[#9BEC00] rounded-lg justify-center items-center p-1"
+              >
+                <Ionicons name="settings-outline" size={22} />
+                <Text>Configurações</Text>
+              </Pressable>
             </View>
-        </Mainframe>
+          </View>
+          <View className="flex-row items-center justify-between mt-4 border-b-2 border-slate-300 pb-2">
+            <Text className="text-2xl dark:color-white">Criar Certificados</Text>
+            <Pressable className="w-min text-nowrap color-white bg-[#2192ff] rounded-lg justify-center items-center p-1 mt-2">Adicionar Certificado</Pressable>
+          </View>
+          <View className='flex-row justify-center items-center border-b border-slate-300 px-4'>
+            <Text className='w-4/12 font-semibold color-slate-400'>TITULO</Text>
+            <Text className='w-2/12 font-semibold color-slate-400'>VALOR</Text>
+            <Text className='w-2/12 font-semibold color-slate-400'>MODELO</Text>
+            <Text className='w-2/12 font-semibold color-slate-400'>ATRIBUIÇÃO</Text>
+            <Text className='w-2/12 font-semibold color-slate-400'>STATUS</Text>
+            <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
+          </View>
+          <View>
+            {/* 1) Carregando */}
+            {loadingCertificados && (
+              <Text className="dark:color-white mt-3">Carregando...</Text>
+            )}
+
+            {/* 2) Vazio */}
+            {!loadingCertificados && certificados.length === 0 && (
+              <Text className="dark:color-white mt-3">Nenhum certificado encontrado.</Text>
+            )}
+
+            {/* 3) Lista */}
+            {!loadingCertificados && certificados.map((certificado, index) => (
+              <CertifyBox
+                key={certificado.atividade_id ?? index}
+                titulo={certificado.titulo}
+                valor={0}
+                modelo="Padrão"
+                att="Automática"
+                status="Ativo"
+                atividade_id={certificado.atividade_id}
+              />
+            ))}
+          </View>
+
+        </View>
+      </Mainframe>
     </ScrollView>
   );
 }

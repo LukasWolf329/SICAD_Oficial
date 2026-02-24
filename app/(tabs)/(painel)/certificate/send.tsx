@@ -36,13 +36,15 @@ export default function SendCerticate() {
     (async () => {
       try {
         const userId = await AsyncStorage.getItem("userId");
-        const lastId = await getLastEventoId(userId);
+        const lastIdRaw = await getLastEventoId(userId);
+        const lastId = Number(lastIdRaw);
 
         if (!alive) return;
 
         if (!lastId) {
-          // Sem último evento -> manda pra tela de escolher evento
-          router.replace("/(tabs)/(painel)/certificate/send"); 
+          setEventoId(null);
+          setEventoNome("Nenhum evento selecionado");
+          setCertificados([]);
           return;
         }
 
@@ -78,7 +80,7 @@ export default function SendCerticate() {
     const controller = new AbortController();
     setLoadingCertificados(true);
 
-    
+
     fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -204,19 +206,42 @@ export default function SendCerticate() {
             <Text className='w-2/12 font-semibold color-slate-400'>OPÇÕES</Text>
           </View>
           <View>
-            {certificados.map((certificado) => {
-              console.log("ID CERT:", certificado.cod_certificado); // <-- TEM que aparecer número
-              return (
-                <ParticipantCertifyBox
-                  key={certificado.cod_certificado}
-                  participante={certificado.participante}
-                  email={certificado.email}
-                  status={certificado.status}
-                  onSend={() => handleSendOne(certificado.cod_certificado)}
-                />
-              );
-            })}
+            {/* 1) Carregando evento */}
+            {loadingEvento && (
+              <Text className="dark:color-white mt-3">Carregando evento...</Text>
+            )}
 
+            {/* 2) Sem evento selecionado */}
+            {!loadingEvento && !eventoId && (
+              <View className="mt-3">
+                <Text className="dark:color-white">
+                  Nenhum evento selecionado. Selecione um evento para enviar certificados.
+                </Text>
+              </View>
+            )}
+
+            {/* 3) Com evento selecionado -> lista/estado */}
+            {!loadingEvento && !!eventoId && (
+              <View>
+                {loadingCertificados && (
+                  <Text className="dark:color-white mt-3">Carregando certificados...</Text>
+                )}
+
+                {!loadingCertificados && certificados.length === 0 && (
+                  <Text className="dark:color-white mt-3">Nenhum certificado encontrado.</Text>
+                )}
+
+                {!loadingCertificados && certificados.map((certificado) => (
+                  <ParticipantCertifyBox
+                    key={certificado.cod_certificado}
+                    participante={certificado.participante}
+                    email={certificado.email}
+                    status={certificado.status}
+                    onSend={() => handleSendOne(certificado.cod_certificado)}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         </View>
       </Mainframe>
