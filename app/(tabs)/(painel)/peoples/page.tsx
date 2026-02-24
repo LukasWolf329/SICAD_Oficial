@@ -1,6 +1,6 @@
 import "../../../../style/global.css";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Text,
   View,
@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Mainframe } from "../../../../components/NavBar";
-import { useLocalSearchParams, router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as Linking from "expo-linking";
@@ -25,28 +24,59 @@ type Pessoa = {
 const API_BASE = "http://localhost/SICAD_Oficial/controller"; // ajuste se necessário
 
 export default function Profile() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const atividadeId = useMemo(() => (rawId ? Number(rawId) : NaN), [rawId]);
-
+  const [atividadeId, setAtividadeId] = useState<number | null>(null);
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [eventoNome, setEventoNome] = useState<string>("Evento");
   const [showActions, setShowActions] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const carregarEventoSelecionado = async () => {
+      const userId = await AsyncStorage.getItem("userId");
+      console.log("userId:", userId);
+
+      const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
+      console.log("key:", key);
+
+      const id = await AsyncStorage.getItem(key);
+      console.log("id salvo:", id);
+
+      if (id) {
+        setAtividadeId(Number(id));
+      }
+    };
+
+    carregarEventoSelecionado();
+  }, []);
+
+  useEffect(() => {
+    if (atividadeId) {
+      carregarPessoas();
+    }
+  }, [atividadeId]);
+
+
   /* ================= EXPORTAR ================= */
 
   const exportarCSV = () => {
-    if (!atividadeId || Number.isNaN(atividadeId)) return;
+    console.log("Cliquei em exportar");
+
+    if (!atividadeId || Number.isNaN(atividadeId)) {
+      console.log("atividadeId inválido:", atividadeId);
+      return;
+    }
 
     const url = `${API_BASE}/exportar_participantes.php?atividade_id=${atividadeId}`;
+    console.log("URL:", url);
+
     Linking.openURL(url);
   };
 
   /* ================= IMPORTAR ================= */
 
   const importarCSV = async () => {
-    if (!atividadeId || Number.isNaN(atividadeId)) return;
+    console.log("Cliquei em importar CSV");
+    if (!atividadeId) return;
 
     const result = await DocumentPicker.getDocumentAsync({
       type: "text/csv",
@@ -97,7 +127,7 @@ export default function Profile() {
   /* ================= CARREGAR PESSOAS ================= */
 
   const carregarPessoas = async () => {
-    if (!atividadeId || Number.isNaN(atividadeId)) return;
+    if (!atividadeId) return;
 
     try {
       setLoading(true);
@@ -125,13 +155,6 @@ export default function Profile() {
       setLoading(false);
     }
   };
-
-  /* ================= USE EFFECTS ================= */
-
-  useEffect(() => {
-    if (!rawId) return;
-    carregarPessoas();
-  }, [rawId]);
 
   /* ================= UI ================= */
 

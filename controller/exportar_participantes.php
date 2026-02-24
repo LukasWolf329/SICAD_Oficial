@@ -1,5 +1,5 @@
 <?php
-include 'conexao.php';
+include '../conexao.php';
 
 if(!isset($_GET['atividade_id'])){
     die("atividade_id não enviado");
