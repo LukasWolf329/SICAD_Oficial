@@ -48,13 +48,13 @@ while($row = $result->fetch_assoc()) {
         $mail->isSMTP();
         $mail->Host = 'smtp.gmail.com';
         $mail->SMTPAuth = true;
-        $mail->Username = 'lukasjuliuswolf@gmail.com';
-        $mail->Password = 'khin fxqc ohye rewu'; // senha de app
+        $mail->Username = 'sicad@atomicmail.io';
+        $mail->Password = 'sicad@2025'; // senha de app
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port = 587;
         $mail->CharSet = "UTF-8";
 
-        $mail->setFrom('lukasjuliuswolf@gmail.com', 'SICAD - Certificados');
+        $mail->setFrom('sicad@atomicmail.io', 'SICAD - Certificados');
         $mail->addAddress($row['email_usuario'], $row['nome_usuario']);
         $mail->Subject = 'Seu certificado está disponível!';
         $mail->Body = "Olá {$row['nome_usuario']},\n\nSegue em anexo o certificado referente ao evento {$row['nome_evento']}.\n\nAtenciosamente,\nEquipe SICAD";

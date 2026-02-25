@@ -1,14 +1,11 @@
 <?php
-// SICAD/reset_password.php
-
 header("Content-Type: application/json; charset=utf-8");
-
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") exit;
 
-require('db.php');
+require(__DIR__ . '/db.php');
 
 function respond($success, $message) {
   echo json_encode([
@@ -18,67 +15,60 @@ function respond($success, $message) {
   exit;
 }
 
-
-// Lê JSON
 $input = json_decode(file_get_contents("php://input"), true);
-$token = isset($input["token"]) ? trim($input["token"]) : "";
-$novaSenha = isset($input["password"]) ? (string)$input["password"] : "";
 
-if (strlen($token) < 20) {
-  respond(false, "Token inválido.");
+$token = isset($input["token"]) ? trim($input["token"]) : "";
+$newPassword = isset($input["password"]) ? $input["password"] : "";
+
+if (!$token || strlen($newPassword) < 6) {
+  respond(false, "Token inválido ou senha muito curta.");
 }
 
-
+// Gera hash do token recebido
 $hashToken = hash("sha256", $token);
 
-// 1) Valida token + expiração
+// Busca token válido e não expirado
 $stmt = $conn->prepare("
   SELECT id_usuario
   FROM redefinicao_senha
   WHERE hash_token = ?
-    AND expira_em >= NOW()
+    AND expira_em > NOW()
   LIMIT 1
 ");
 $stmt->bind_param("s", $hashToken);
 $stmt->execute();
 $stmt->bind_result($idUsuario);
-
-$tokenOk = $stmt->fetch();
+$tokenValido = $stmt->fetch();
 $stmt->close();
 
-if (!$tokenOk) {
+if (!$tokenValido) {
   respond(false, "Token inválido ou expirado.");
 }
 
-// 2) Troca a senha (hash seguro)
-$senhaHash = password_hash($novaSenha, PASSWORD_DEFAULT);
+// Gera hash da nova senha
+$senhaHash = password_hash($newPassword, PASSWORD_DEFAULT);
 
-// Transação (boa prática)
-$conn->begin_transaction();
+// Atualiza senha
+$stmt = $conn->prepare("
+  UPDATE usuario
+  SET senha = ?
+  WHERE ID = ?
+");
+$stmt->bind_param("si", $senhaHash, $idUsuario);
+$okUpdate = $stmt->execute();
+$stmt->close();
 
-try {
-  // Atualiza senha
-  $stmt = $conn->prepare("UPDATE usuario SET senha = ? WHERE ID = ?");
-  $stmt->bind_param("si", $senhaHash, $idUsuario);
-  $stmt->execute();
-  $stmt->close();
-
-  // (Opcional) se você usa usuario.token para autenticação, derruba sessão antiga:
-  $stmt = $conn->prepare("UPDATE usuario SET token = NULL WHERE ID = ?");
-  $stmt->bind_param("i", $idUsuario);
-  $stmt->execute();
-  $stmt->close();
-
-  // Apaga token (uso único)
-  $stmt = $conn->prepare("DELETE FROM redefinicao_senha WHERE hash_token = ?");
-  $stmt->bind_param("s", $hashToken);
-  $stmt->execute();
-  $stmt->close();
-
-  $conn->commit();
-} catch (Throwable $e) {
-  $conn->rollback();
-  respond(false, "Erro ao atualizar senha.");
+if (!$okUpdate) {
+  respond(false, "Não foi possível atualizar a senha.");
 }
 
-respond(true, "Senha atualizada com sucesso.");
+// Remove token usado
+$stmt = $conn->prepare("
+  DELETE FROM redefinicao_senha
+  WHERE id_usuario = ?
+");
+$stmt->bind_param("i", $idUsuario);
+$stmt->execute();
+$stmt->close();
+
+respond(true, "Senha redefinida com sucesso!");

@@ -26,6 +26,9 @@ export default function Login() {
   const [verifyToken, setVerifyToken] = React.useState("");
   const [verifying, setVerifying] = React.useState(false);
 
+  const [isForgotMode, setIsForgotMode] = React.useState(false);
+  const [forgotEmail, setForgotEmail] = React.useState("");
+
   const router = useRouter();
 
   function showError(message: string, title = "Ocorreu um erro") {
@@ -124,29 +127,47 @@ async function handleSignIn() {
     }
   }
 
-  async function handleForgotPassword() {
-    if (!email) {
-      showError("Digite seu e-mail para enviar o código de redefinição.");
+  function handleForgotPassword() {
+    setIsForgotMode(true);
+    setNeedVerify(false);
+    setAlertVariant("info");
+    setAlertTitle("Recuperar senha");
+    setAlertMessage("Digite seu e-mail para receber o código de redefinição.");
+    setForgotEmail("");
+    setAlertVisible(true);
+  } 
+
+  async function handleSendForgotEmail() {
+    const emailToSend = forgotEmail.trim();
+
+    if (!emailToSend) {
+      setAlertVariant("error");
+      setAlertTitle("E-mail obrigatório");
+      setAlertMessage("Digite um e-mail válido.");
       return;
     }
 
     try {
-      const response = await axios.post("http://localhost/SICAD_Oficial/controller/forgot_password.php", {
-        email,
-      });
+      const response = await axios.post(
+        "http://localhost/SICAD_Oficial/controller/forgot_password.php",
+        { email: emailToSend }
+      );
 
       if (response.data?.success) {
-        setAlertVariant("info");
-        setNeedVerify(false);
+        setIsForgotMode(false);
+        setAlertVariant("success");
         setAlertTitle("Verifique seu e-mail");
         setAlertMessage(response.data.message);
-        setAlertVisible(true);
       } else {
-        showError(response.data?.message ?? "Não foi possível enviar o e-mail.");
+        setAlertVariant("error");
+        setAlertTitle("Erro");
+        setAlertMessage(response.data?.message ?? "Não foi possível enviar o e-mail.");
       }
     } catch (error) {
-      console.error("Erro na requisicao: ", error);
-      showError("Erro de conexão. Tente novamente.");
+      console.error(error);
+      setAlertVariant("error");
+      setAlertTitle("Erro de conexão");
+      setAlertMessage("Tente novamente.");
     }
   }
 
@@ -227,15 +248,50 @@ async function handleSignIn() {
         visible={alertVisible}
         title={alertTitle}
         message={alertMessage}
-        onClose={() => setAlertVisible(false)}
+        onClose={() => {
+          setAlertVisible(false);
+          setIsForgotMode(false);
+        }}
         variant={alertVariant}
-        showInput={needVerify}
-        inputPlaceholder="Cole o token aqui"
-        inputValue={verifyToken}
-        onChangeInput={setVerifyToken}
-        confirmText={verifying ? "Validando..." : "Validar"}
-        onConfirm={needVerify ? handleVerifyEmail : undefined}
-        confirmDisabled={needVerify ? verifying || verifyToken.trim().length === 0 : false}
+        showInput={needVerify || isForgotMode}
+        inputPlaceholder={
+          needVerify
+            ? "Cole o token aqui"
+            : "Digite seu e-mail"
+        }
+        inputValue={
+          needVerify
+            ? verifyToken
+            : forgotEmail
+        }
+        onChangeInput={
+          needVerify
+            ? setVerifyToken
+            : setForgotEmail
+        }
+        confirmText={
+          needVerify
+            ? verifying
+              ? "Validando..."
+              : "Validar"
+            : isForgotMode
+              ? "Enviar"
+              : undefined
+        }
+        onConfirm={
+          needVerify
+            ? handleVerifyEmail
+            : isForgotMode
+              ? handleSendForgotEmail
+              : undefined
+        }
+        confirmDisabled={
+          needVerify
+            ? verifying || verifyToken.trim().length === 0
+            : isForgotMode
+              ? forgotEmail.trim().length === 0
+              : false
+        }
       />
     </View>
   );

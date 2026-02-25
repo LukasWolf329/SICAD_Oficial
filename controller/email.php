@@ -30,12 +30,12 @@ if ($stmt->execute()) {
             $mail->isSMTP();
             $mail->Host = 'smtp.gmail.com';
             $mail->SMTPAuth = true;
-            $mail->Username = 'lukasjuliuswolf@gmail.com';
-            $mail->Password = 'bblo pskl wxyz ydtb'; // senha de app
+            $mail->Username = 'sicad@atomicmail.io';
+            $mail->Password = 'sicad@2025'; // senha de app
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = 587;
 
-            $mail->setFrom('lukasjuliuswolf@gmail.com', 'Lukas');
+            $mail->setFrom('sicad@atomicmail.io', 'SICAD - Certificados');
             $mail->addAddress($email, $nome);
 
             $mail->isHTML(true);
