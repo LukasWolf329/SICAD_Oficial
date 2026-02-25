@@ -11,15 +11,15 @@ require(__DIR__ . '/db.php'); // precisa criar $conn (mysqli)
 
 // ========= SMTP =========
 $SMTP_HOST   = "smtp.gmail.com";
-$SMTP_USER   = "sicad@atomicmail.io";
+$SMTP_USER   = "sicad.certificados@gmail.com";
 
 // ⚠️ NÃO deixe a senha no código.
 // Coloque em variável de ambiente: SMTP_PASS
-$SMTP_PASS   = "sicad@2025"; 
+$SMTP_PASS   = "dtrt frya etbb ohhy"; 
 
 $SMTP_PORT   = 587;
 $SMTP_SECURE = "tls";
-$FROM_EMAIL  = "sicad@atomicmail.io";
+$FROM_EMAIL  = "sicad.certificados@gmail.com";
 $FROM_NAME   = "SICAD";
 // =========================
 

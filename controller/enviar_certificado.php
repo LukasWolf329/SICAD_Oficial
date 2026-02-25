@@ -729,13 +729,13 @@ LIMIT 1
   $mail->isSMTP();
   $mail->Host = 'smtp.gmail.com';
   $mail->SMTPAuth = true;
-  $mail->Username = 'sicad@atomicmail.io';
-  $mail->Password = 'sicad@2025'; // senha de app
+  $mail->Username = 'sicad.certificados@gmail.com';
+  $mail->Password = 'dtrt frya etbb ohhy'; // senha de app
   $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
   $mail->Port = 587;
   $mail->CharSet = "UTF-8";
 
-  $mail->setFrom('sicad@atomicmail.io', 'SICAD - Certificados');
+  $mail->setFrom('sicad.certificados@gmail.com', 'SICAD - Certificados');
   $mail->addAddress($row['email_usuario'], $row['nome_usuario']);
   $mail->Subject = 'Seu certificado está disponível!';
   $mail->Body = "Olá {$row['nome_usuario']},\n\nSegue em anexo seu certificado da atividade \"{$row['nome_atividade']}\".\n\nAtenciosamente,\nEquipe SICAD";
