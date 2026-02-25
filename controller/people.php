@@ -5,12 +5,19 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header("Content-Type: application/json; charset=UTF-8");
 require("db.php");
 
-// id do evento vindo via GET/POST ou fixo para teste
-$evento_id = 1;
+$input = json_decode(file_get_contents("php://input"), true);
+
+if (is_array($input) && isset($input["evento_id"])) {
+    $evento_id = (int)$input["evento_id"];
+} elseif (isset($_GET["evento_id"])) {
+    $evento_id = (int)$_GET["evento_id"];
+} elseif (isset($_POST["evento_id"])) {
+    $evento_id = (int)$_POST["evento_id"];
+}
 
 $response = [];
 
-$stmt = $conn->prepare("SELECT usuario_nome, usuario_email 
+$stmt = $conn->prepare("SELECT DISTINCT usuario_nome, usuario_email 
 FROM vw_usuarios_evento 
 WHERE evento_id = ?;");
 $stmt->bind_param("i", $evento_id);

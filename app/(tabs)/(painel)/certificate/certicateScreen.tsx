@@ -8,7 +8,7 @@ import { useLocalSearchParams } from "expo-router";
 export default function CertificateModify() {
   const { atividade_id } = useLocalSearchParams<{ atividade_id?: string }>();
 
-  const pageUrlBase = "http://localhost/SICAD/editor/index.html";
+  const pageUrlBase = "http://localhost/SICAD_Oficial/controller/editor/index.html";
 
   
   const pageUrl = atividade_id

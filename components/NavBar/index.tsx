@@ -56,6 +56,12 @@ export function NavBar() {
     async function carregarEvento() {
       try {
         const userId = await AsyncStorage.getItem("userId");
+        console.log("userId:", userId);
+
+        if (!userId) {
+          setEvento([]);
+          return;
+        }
 
         const response = await fetch(
           "http://localhost/SICAD_Oficial/controller/get_dropdown_eventos.php",
@@ -66,16 +72,45 @@ export function NavBar() {
           }
         );
 
-        const data = await response.json();
-        setEvento(data.eventos || []);
+        const raw = await response.text();
+        console.log("RAW dropdown:", raw);
 
+        let data: any;
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          console.error("get_dropdown_eventos.php não retornou JSON válido");
+          setEvento([]);
+          return;
+        }
+
+        // aceita tanto {eventos:[...]} quanto [...]
+        const lista = Array.isArray(data) ? data : (data.eventos ?? []);
+
+        // normaliza nomes possíveis vindos do PHP/SQL
+        const normalizada = lista.map((ev: any) => ({
+          evento_id: Number(ev.evento_id ?? ev.codigo ?? 0),
+          evento_nome: String(ev.evento_nome ?? ev.nome ?? "Evento"),
+          data_inicio: String(ev.data_inicio ?? ""),
+          data_fim: String(ev.data_fim ?? ""),
+          status_usuario: String(ev.status_usuario ?? ev.tipo_vinculo ?? ""),
+          total_participantes:
+            ev.total_participantes === null || ev.total_participantes === undefined
+              ? null
+              : Number(ev.total_participantes),
+        }));
+
+        setEvento(normalizada);
       } catch (error) {
         console.error("Erro ao carregar eventos:", error);
+        setEvento([]);
       }
     }
 
     carregarEvento();
   }, []);
+
+
 
   /* ---------------- Abrir evento com params ---------------- */
   async function abrirEvento(eventoId: number) {

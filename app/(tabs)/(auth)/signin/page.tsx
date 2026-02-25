@@ -63,7 +63,7 @@ async function handleSignIn() {
 
         await AsyncStorage.setItem("userToken", token);
         await AsyncStorage.setItem("userName", nome);
-        await AsyncStorage.setItem("userId", String(id)); // <- string
+        await AsyncStorage.setItem("userId", String(id)); 
 
         router.push("/(tabs)/(painel)/home/page");
         return;
@@ -217,7 +217,7 @@ async function handleSignIn() {
             <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
           </Pressable>
 
-          <Link href="/(tabs)/(painel)/home/page" className="dark:color-white underline text-xl mt-2">
+          <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
             Já tenho o token / redefinir senha
           </Link>
         </View>

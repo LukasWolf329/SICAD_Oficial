@@ -15,29 +15,36 @@ if (!$evento_id) {
 }
 
 $sql = "
-SELECT 
-    e.nome AS evento_nome,
+    select
+        e.nome as evento_nome,
 
-    COALESCE((
-        SELECT COUNT(DISTINCT v.usuario_id)
-        FROM vw_num_cadastrados_evento v
-        WHERE v.evento_id = e.codigo
-    ), 0) AS total_participantes,
+        count(distinct uev.usuario_id)      as total_participantes,
+        count(distinct a.id)                as atividades_cadastradas,
+        count(distinct c.codigo)            as total_certificados
 
-    COALESCE((
-        SELECT COUNT(*)
-        FROM Atividade a
-        WHERE a.fk_Evento_codigo = e.codigo
-    ), 0) AS atividades_cadastradas,
+    from evento e
 
-    COALESCE((
-        SELECT total_certificados
-        FROM total_certificados_evento tc
-        WHERE tc.evento_id = e.codigo
-    ), 0) AS total_certificados
+    left join atividade a
+        on a.fk_evento_codigo = e.codigo
 
-FROM Evento e
-WHERE e.codigo = ?;
+    left join participa p
+        on p.fk_atividade_id = a.id
+
+    left join certificado c
+        on c.fk_atividade_id = a.id
+
+    left join (
+        select g.fk_evento_codigo as evento_id, g.fk_usuario_id as usuario_id
+        from gerencia g
+        union
+        select a2.fk_evento_codigo as evento_id, p2.fk_usuario_id as usuario_id
+        from atividade a2
+        join participa p2 on p2.fk_atividade_id = a2.id
+    ) uev
+        on uev.evento_id = e.codigo
+
+    where e.codigo = ?
+    group by e.codigo, e.nome;
 ";
 
 $stmt = $conn->prepare($sql);

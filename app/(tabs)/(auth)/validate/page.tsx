@@ -17,7 +17,7 @@ export default function Login() {
   const [alertVisible, setAlertVisible] = React.useState(false);
   const [alertTitle, setAlertTitle] = React.useState('');
   const [alertMessage, setAlertMessage] = React.useState('');
-  
+
   const router = useRouter();
 
   function openAlert(title: string, message: string) {
@@ -28,9 +28,9 @@ export default function Login() {
 
   function formatarCodigo(value: string) {
     const raw = value
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "") // remove tudo que não é letra/número
-    .slice(0, 20);            // limita a 20 caracteres
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 24); // agora 24
 
     const partes = raw.match(/.{1,4}/g) ?? [];
     return partes.join("-");
@@ -45,16 +45,15 @@ export default function Login() {
   }
 
   async function handleSignIn() {
-        const codigoFormatado = formatarCodigo(codigo_certificado);
+    const codigoFormatado = formatarCodigo(codigo_certificado);
 
-    if (!codigoFormatado || codigoFormatado.replace(/-/g, "").length !== 20) {
+    if (codigoFormatado.replace(/-/g, "").length !== 24) {
       openAlert(
         "Código inválido",
-        "Digite um código no formato XXXX-XXXX-XXXX-XXXX-XXXX (20 caracteres)."
+        "Digite um código no formato XXXX-XXXX-XXXX-XXXX-XXXX-XXXX (24 caracteres)."
       );
       return;
     }
-
     setLoading(true);
     try {
       // Pode ser GET com params (mais simples)
@@ -84,10 +83,10 @@ export default function Login() {
       openAlert(
         "Certificado válido ✅",
         `Código: ${c.codigo}\n\n` +
-          `Nome: ${c.nome_usuario}\n` +
-          `Atividade: ${c.nome_atividade}\n` +
-          (c.nome_palestrante ? `Palestrante: ${c.nome_palestrante}\n` : "") +
-          (c.data_emissao ? `Emissão: ${formatarDataBR(c.data_emissao)}` : "")
+        `Nome: ${c.nome_usuario}\n` +
+        `Atividade: ${c.nome_atividade}\n` +
+        (c.nome_palestrante ? `Palestrante: ${c.nome_palestrante}\n` : "") +
+        (c.data_emissao ? `Emissão: ${formatarDataBR(c.data_emissao)}` : "")
       );
     } catch (err: any) {
       const msg =
@@ -102,8 +101,8 @@ export default function Login() {
 
   return (
     <View className="flex-1 flex-row bg-white dark:bg-[#121212]">
-      <View id="aside" className=" w-5/12"> 
-        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden"/>
+      <View id="aside" className=" w-5/12">
+        <Image source={require('../../../../assets/images/side-view-login-cadastro.png')} style={{ width: '100%' }} className=" mobile:h-0 mobile:w-0 mobile:hidden" />
       </View>
       <View className="flex-1 items-center justify-center">
         <View>
@@ -113,7 +112,7 @@ export default function Login() {
             <View>
               <SafeAreaProvider>
                 <SafeAreaView>
-                  <TextInput value={codigo_certificado} placeholder="Codigo" onChangeText={setCodigo_certificado} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4 color-slate-400"/>
+                  <TextInput value={codigo_certificado} placeholder="Codigo" onChangeText={setCodigo_certificado} className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4 color-slate-400" />
                 </SafeAreaView>
               </SafeAreaProvider>
             </View>
@@ -122,11 +121,11 @@ export default function Login() {
         </View>
       </View>
       <NiceAlert
-      visible={alertVisible}
-      title={alertTitle}
-      message={alertMessage}
-      onClose={() => setAlertVisible(false)}
-    />
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 }

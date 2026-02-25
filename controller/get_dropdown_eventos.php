@@ -4,78 +4,76 @@ header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 
-require('db.php');
-
-// RECEBE O JSON DO FETCH
-$input = json_decode(file_get_contents('php://input'), true);
-$userId = $input['userId'] ?? null;
-
-// VALIDA
-if (!$userId || intval($userId) <= 0) {
-    echo json_encode(["error" => "userId inválido"]);
-    exit;
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+  http_response_code(204);
+  exit;
 }
 
+require("db.php");
+
+$input = json_decode(file_get_contents("php://input"), true);
+$userId = isset($input["userId"]) ? (int)$input["userId"] : 0;
+
+if ($userId <= 0) {
+  echo json_encode(["success" => false, "eventos" => [], "message" => "userId inválido"]);
+  exit;
+}
+
+
 $sql = "
-SELECT
-    e.codigo AS evento_id,
-    e.nome AS evento_nome,
+select
+    e.codigo as evento_id,
+    e.nome as evento_nome,
     e.data_inicio,
     e.data_fim,
 
-    CASE
-        WHEN g.fk_Usuario_ID IS NOT NULL THEN 'organizador'
-        ELSE 'participante'
-    END AS status_usuario,
+    case
+        when g.fk_usuario_id is not null then 'organizador'
+        else 'participante'
+    end as status_usuario,
 
-    CASE
-        WHEN g.fk_Usuario_ID IS NOT NULL THEN (
-            SELECT COUNT(DISTINCT p2.fk_Usuario_ID)
-            FROM participa p2
-            JOIN atividade a2 ON a2.ID = p2.fk_Atividade_ID
-            WHERE a2.fk_Evento_codigo = e.codigo
+    case
+        when g.fk_usuario_id is not null then (
+            select count(distinct p2.fk_usuario_id)
+            from participa p2
+            join atividade a2 on a2.id = p2.fk_atividade_id
+            where a2.fk_evento_codigo = e.codigo
         )
-        ELSE NULL
-    END AS total_participantes
+        else null
+    end as total_participantes
 
-FROM evento e
+from evento e
 
-LEFT JOIN gerencia g
-       ON g.fk_Evento_codigo = e.codigo
-      AND g.fk_Usuario_ID = 4
+left join gerencia g
+       on g.fk_evento_codigo = e.codigo
+      and g.fk_usuario_id = ?
 
-LEFT JOIN atividade a
-       ON a.fk_Evento_codigo = e.codigo
+left join atividade a
+       on a.fk_evento_codigo = e.codigo
 
-LEFT JOIN participa p
-       ON p.fk_Atividade_ID = a.ID
-      AND p.fk_Usuario_ID = 4
+left join participa p
+       on p.fk_atividade_id = a.id
+      and p.fk_usuario_id = ?
 
-WHERE g.fk_Usuario_ID IS NOT NULL
-   OR p.fk_Usuario_ID IS NOT NULL
+where g.fk_usuario_id is not null
+   or p.fk_usuario_id is not null
 
-GROUP BY e.codigo, status_usuario, total_participantes
-ORDER BY e.data_inicio DESC;
+group by
+    e.codigo, e.nome, e.data_inicio, e.data_fim,
+    status_usuario, total_participantes
+
+order by e.data_inicio desc;
 ";
 
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("ii", $userId, $userId);
 $stmt->execute();
-$result = $stmt->get_result();
 
+$res = $stmt->get_result();
 $eventos = [];
 
-while ($row = $result->fetch_assoc()) {
-    $eventos[] = [
-        "evento_id" => $row["evento_id"],
-        "evento_nome" => $row["evento_nome"],
-        "data_inicio" => date("d/m/Y", strtotime($row["data_inicio"])),
-        "data_fim" => date("d/m/Y", strtotime($row["data_fim"])),
-        "status_usuario" => $row["status_usuario"],
-        "total_participantes" => $row["total_participantes"],
-    ];
+while ($row = $res->fetch_assoc()) {
+  $eventos[] = $row;
 }
 
-echo json_encode(["eventos" => $eventos], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-$conn->close();
+echo json_encode(["success" => true, "eventos" => $eventos], JSON_UNESCAPED_UNICODE);

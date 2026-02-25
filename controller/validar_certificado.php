@@ -22,20 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 function normalizar_codigo(string $in): ?string {
-  $in = strtoupper(trim($in));
-  // remove tudo que não é letra/número
-  $raw = preg_replace('/[^A-Z0-9]/', '', $in);
-
-  // nosso padrão é 20 chars sem hífen (XXXX... 20)
-  if (strlen($raw) !== 20) return null;
-
-  return implode('-', str_split($raw, 4)); // XXXX-XXXX-XXXX-XXXX-XXXX
+  $raw = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($in)));
+  if (strlen($raw) !== 24) return null;          // agora é 24
+  return $raw;                                    // retorna SEM hífen
 }
 
-$codigoNorm = normalizar_codigo($codigo);
-if ($codigoNorm === null) {
+function formatar_codigo(string $raw): string {
+  return implode('-', str_split($raw, 4));        // XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+}
+
+$codigoRaw = normalizar_codigo($codigo);
+if ($codigoRaw === null) {
   http_response_code(400);
-  echo json_encode(["success" => false, "message" => "Código inválido. Use o formato XXXX-XXXX-XXXX-XXXX-XXXX."]);
+  echo json_encode([
+    "success" => false,
+    "message" => "Código inválido. Use o formato XXXX-XXXX-XXXX-XXXX-XXXX-XXXX (24 caracteres)."
+  ]);
   exit;
 }
 
@@ -49,12 +51,12 @@ $sql = "
   FROM certificado c
   JOIN usuario u ON u.ID = c.fk_Usuario_ID
   JOIN atividade a ON a.ID = c.fk_Atividade_ID
-  WHERE c.codigo_validacao = ?
+  WHERE REPLACE(UPPER(c.codigo_validacao), '-', '') = ?
   LIMIT 1
 ";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $codigoNorm);
+$stmt->bind_param("s", $codigoRaw);
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
 
@@ -63,11 +65,13 @@ if (!$row) {
   exit;
 }
 
+$codigoDbRaw = preg_replace('/[^A-Z0-9]/', '', strtoupper($row["codigo_validacao"]));
+
 echo json_encode([
   "success" => true,
   "exists" => true,
   "certificado" => [
-    "codigo" => $row["codigo_validacao"],
+    "codigo" => formatar_codigo($codigoDbRaw), // devolve com hífen pro app
     "data_emissao" => $row["data_emissao"],
     "nome_usuario" => $row["nome_usuario"],
     "nome_atividade" => $row["nome_atividade"],

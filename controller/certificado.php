@@ -22,12 +22,12 @@ if ($evento_id <= 0) {
 $response = [];
 
 $stmt = $conn->prepare("
-  SELECT DISTINCT 
+SELECT DISTINCT
     a.ID   AS atividade_id,
     a.nome AS titulo
-  FROM Certificado c
-  JOIN Atividade a ON c.fk_Atividade_ID = a.ID
-  JOIN Evento e ON a.fk_Evento_codigo = e.codigo
+  FROM `certificado` AS c
+  JOIN `atividade`   AS a ON a.ID = c.fk_Atividade_ID
+  JOIN `evento`      AS e ON e.codigo = a.fk_Evento_codigo
   WHERE e.codigo = ?
   ORDER BY a.nome;
 ");
