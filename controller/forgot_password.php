@@ -9,19 +9,7 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") exit;
 
 require(__DIR__ . '/db.php'); // precisa criar $conn (mysqli)
 
-// ========= SMTP =========
-$SMTP_HOST   = "smtp.gmail.com";
-$SMTP_USER   = "sicad.certificados@gmail.com";
 
-// ⚠️ NÃO deixe a senha no código.
-// Coloque em variável de ambiente: SMTP_PASS
-$SMTP_PASS   = "dtrt frya etbb ohhy"; 
-
-$SMTP_PORT   = 587;
-$SMTP_SECURE = "tls";
-$FROM_EMAIL  = "sicad.certificados@gmail.com";
-$FROM_NAME   = "SICAD";
-// =========================
 
 function respond($success, $message) {
   echo json_encode([
@@ -61,11 +49,11 @@ function sendResetEmailPHPMailer(string $toEmail, string $token, array $smtpConf
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     $mail->CharSet = "UTF-8";
     $mail->isSMTP();
-    $mail->Host       = $smtpConfig["host"];
+    $mail->Host       = 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = $smtpConfig["user"];
-    $mail->Password   = $smtpConfig["pass"];
-    $mail->Port       = $smtpConfig["port"];
+    $mail->Username   = 'sicad.certificados@gmail.com';
+    $mail->Password   = 'dtrt frya etbb ohhy';
+    $mail->Port       = 587;
 
     if ($smtpConfig["secure"] === "ssl") {
       $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
