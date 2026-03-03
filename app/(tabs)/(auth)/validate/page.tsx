@@ -57,7 +57,8 @@ export default function Login() {
     setLoading(true);
     try {
       // Pode ser GET com params (mais simples)
-      const { data } = await axios.get("http://localhost/SICAD_Oficial/controller/validar_certificado.php", {
+      //const { data } = await axios.get("http://localhost/SICAD_Oficial/controller/validar_certificado.php", {
+      const { data } = await axios.get("https://sicad.linceonline.com.br/controller/validar_certificado.php", {
         params: { codigo: codigoFormatado },
         timeout: 15000,
       });

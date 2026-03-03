@@ -54,7 +54,8 @@ async function handleSignIn() {
   }
 
   try {
-    const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
+    //const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
+    const response = await axios.post("https://sicad.linceonline.com.br/controller/login.php", {
       email,
       senha,
     });
@@ -94,7 +95,9 @@ async function handleSignIn() {
 
     setVerifying(true);
     try {
-      const res = await axios.post("http://localhost/SICAD_Oficial/controller/verify_email.php", {
+      //on server, use :
+      const res = await axios.post("https://sicad.linceonline.com.br/controller/verify_email.php", {
+      //const res = await axios.post("http://localhost/SICAD_Oficial/controller/verify_email.php", {
         email,
         token,
       });
@@ -149,7 +152,8 @@ async function handleSignIn() {
 
     try {
       const response = await axios.post(
-        "http://localhost/SICAD_Oficial/controller/forgot_password.php",
+        //"http://localhost/SICAD_Oficial/controller/forgot_password.php",
+        "https://sicad.linceonline.com.br/controller/forgot_password.php",
         { email: emailToSend }
       );
 

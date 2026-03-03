@@ -24,7 +24,9 @@ type Pessoa = {
   email: string;
 };
 
-const API_BASE = "http://localhost/SICAD_Oficial/controller";
+
+//const API_BASE = "http://localhost/SICAD_Oficial/controller";
+const API_BASE = "https://sicad.linceonline.com.br/controller";
 
 export default function HomePage() {
   /* ================= PARAMS ================= */

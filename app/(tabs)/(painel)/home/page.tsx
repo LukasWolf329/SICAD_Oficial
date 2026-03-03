@@ -66,7 +66,8 @@ export default function HomePage() {
 
     const controller = new AbortController();
 
-    fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
+    //fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
+    fetch("https://sicad.linceonline.com.br/controller/page-org.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),

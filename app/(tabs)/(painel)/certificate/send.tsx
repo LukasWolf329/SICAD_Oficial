@@ -51,7 +51,8 @@ export default function SendCerticate() {
         setEventoId(lastId);
 
         // (Opcional) pegar nome do evento pra mostrar no Mainframe
-        const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
+        //const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
+        const res = await fetch("https://sicad.linceonline.com.br/controller/page-org.php", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ evento_id: lastId }),
@@ -81,7 +82,8 @@ export default function SendCerticate() {
     setLoadingCertificados(true);
 
 
-    fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
+    //fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
+    fetch(`https://sicad.linceonline.com.br/controller/get_certificado.php?t=${Date.now()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evento_id: eventoId }),
@@ -129,7 +131,8 @@ export default function SendCerticate() {
   };
 
   const handleSendOne = async (cod_certificado: number) => {
-    const res = await fetch("http://localhost/SICAD_Oficial/controller/enviar_certificado.php", {
+    //const res = await fetch("http://localhost/SICAD_Oficial/controller/enviar_certificado.php", {
+    const res = await fetch("https://sicad.linceonline.com.br/controller/enviar_certificado.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cod_certificado }),

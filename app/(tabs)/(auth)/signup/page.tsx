@@ -61,7 +61,8 @@ export default function Signup() {
     }
 
     try {
-      const res = await fetch("http://localhost/SICAD_Oficial/controller/cadastro.php", {
+      //const res = await fetch("http://localhost/SICAD_Oficial/controller/cadastro.php", {
+      const res = await fetch("https://sicad.linceonline.com.br/controller/cadastro.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nome, email, senha }),
@@ -95,7 +96,8 @@ export default function Signup() {
     if (!t) return;
 
     try {
-      const res = await fetch("http://localhost/SICAD_Oficial/controller/verify_email.php", {
+      //const res = await fetch("http://localhost/SICAD_Oficial/controller/verify_email.php", {
+      const res = await fetch("https://sicad.linceonline.com.br/controller/verify_email.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, token: t }),
@@ -116,7 +118,8 @@ export default function Signup() {
 
       if (data?.success) {
         // ✅ opção 1 (melhor UX): logar automaticamente após validar
-        const loginResp = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", { email, senha });
+        //const loginResp = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", { email, senha });
+        const loginResp = await axios.post("https://sicad.linceonline.com.br/controller/login.php", { email, senha });
         if (loginResp.data?.success) {
           const tokenJwt = loginResp.data.token;
           const nomeUser = loginResp.data.usuario.nome;

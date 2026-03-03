@@ -3,11 +3,11 @@ ini_set('session.cookie_samesite', 'None');
 ini_set('session.cookie_secure', 'false'); // troque para 'true' se usar HTTPS
 session_start();
 
-// ====== CONFIGURAÇÃO DE CORS ======
 $allowed_origins = [
-    'http://localhost:8081',
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://sicad.linceonline.com.br"
 ];
-
 if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
     header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
     header("Access-Control-Allow-Credentials: true");

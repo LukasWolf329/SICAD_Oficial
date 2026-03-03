@@ -64,7 +64,8 @@ export function NavBar() {
         }
 
         const response = await fetch(
-          "http://localhost/SICAD_Oficial/controller/get_dropdown_eventos.php",
+          //"http://localhost/SICAD_Oficial/controller/get_dropdown_eventos.php",
+          "https://sicad.linceonline.com.br/controller/get_dropdown_eventos.php",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

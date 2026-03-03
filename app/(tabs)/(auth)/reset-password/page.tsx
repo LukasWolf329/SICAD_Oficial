@@ -37,7 +37,8 @@ export default function ResetPassword() {
     }
 
     try {
-      const response = await axios.post("http://localhost/SICAD_Oficial/controller/reset_password.php", {
+      //const response = await axios.post("http://localhost/SICAD_Oficial/controller/reset_password.php", {
+      const response = await axios.post("https://sicad.linceonline.com.br/controller/reset_password.php", {
         token: token,
         password: senha,
       });
