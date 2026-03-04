@@ -69,7 +69,7 @@ async function handleSignIn() {
         await AsyncStorage.setItem("userName", nome);
         await AsyncStorage.setItem("userId", String(id)); 
 
-        router.push("/(tabs)/(painel)/home/page");
+        router.push("/(painel)/home/page");
         return;
       }
 
@@ -192,7 +192,7 @@ async function handleSignIn() {
 
           <Text className="text-2xl dark:color-white">
             Ainda não tem uma conta ?{" "}
-            <Link href={"/(tabs)/(auth)/signup/page"} className="text-2xl color-sky-500">
+            <Link href={"/(auth)/signup/page"} className="text-2xl color-sky-500">
               clique aqui para criar uma
             </Link>
           </Text>
@@ -234,15 +234,18 @@ async function handleSignIn() {
               onPress={handleSignIn}
               className="w-full h-12 rounded-xl bg-green-600 text-2xl font-bold mt-4 color-white justify-center items-center"
             >
-              Entrar
+              <Text className="text-2xl font-bold text-white">
+                Entrar
+              </Text>
             </Pressable>
+
           </form>
 
           <Pressable onPress={handleForgotPassword}>
             <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
           </Pressable>
 
-          <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
+          <Link href="/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
             Já tenho o token / redefinir senha
           </Link>
         </View>
