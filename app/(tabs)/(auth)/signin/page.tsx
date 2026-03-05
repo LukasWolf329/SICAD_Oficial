@@ -47,18 +47,18 @@ export default function Login() {
     setAlertVisible(true);
   }
 
-async function handleSignIn() {
-  if (!email || !senha) {
-    showError("Por favor, preencha todos os campos");
-    return;
-  }
+  async function handleSignIn() {
+    if (!email || !senha) {
+      showError("Por favor, preencha todos os campos");
+      return;
+    }
 
-  try {
-    //const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
-    const response = await axios.post("https://sicad.linceonline.com.br/controller/login.php", {
-      email,
-      senha,
-    });
+    try {
+      //const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
+      const response = await axios.post("https://sicad.linceonline.com.br/controller/login.php", {
+        email,
+        senha,
+      });
 
       if (response.data?.success) {
         const token = response.data.token;
@@ -67,9 +67,9 @@ async function handleSignIn() {
 
         await AsyncStorage.setItem("userToken", token);
         await AsyncStorage.setItem("userName", nome);
-        await AsyncStorage.setItem("userId", String(id)); 
+        await AsyncStorage.setItem("userId", String(id));
 
-        router.push("/(painel)/home/page");
+        router.push("/(tabs)/(painel)/home/page");
         return;
       }
 
@@ -82,8 +82,18 @@ async function handleSignIn() {
 
       // erro normal
       showError(response.data?.message ?? "Credenciais inválidas");
-    } catch (error) {
-      console.error("Erro na requisicao: ", error);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        console.log("AXIOS ERROR:", {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.response?.headers,
+        });
+      } else {
+        console.log("UNKNOWN ERROR:", error);
+      }
+
       showError("Erro de conexão. Tente novamente.");
     }
   }
@@ -97,7 +107,7 @@ async function handleSignIn() {
     try {
       //on server, use :
       const res = await axios.post("https://sicad.linceonline.com.br/controller/verify_email.php", {
-      //const res = await axios.post("http://localhost/SICAD_Oficial/controller/verify_email.php", {
+        //const res = await axios.post("http://localhost/SICAD_Oficial/controller/verify_email.php", {
         email,
         token,
       });
@@ -138,7 +148,7 @@ async function handleSignIn() {
     setAlertMessage("Digite seu e-mail para receber o código de redefinição.");
     setForgotEmail("");
     setAlertVisible(true);
-  } 
+  }
 
   async function handleSendForgotEmail() {
     const emailToSend = forgotEmail.trim();
@@ -192,7 +202,7 @@ async function handleSignIn() {
 
           <Text className="text-2xl dark:color-white">
             Ainda não tem uma conta ?{" "}
-            <Link href={"/(auth)/signup/page"} className="text-2xl color-sky-500">
+            <Link href={"/(tabs)/(auth)/signup/page"} className="text-2xl color-sky-500">
               clique aqui para criar uma
             </Link>
           </Text>
@@ -245,7 +255,7 @@ async function handleSignIn() {
             <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
           </Pressable>
 
-          <Link href="/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
+          <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">
             Já tenho o token / redefinir senha
           </Link>
         </View>
