@@ -25,16 +25,8 @@ function respond($success, $message, $extra = []) {
   exit;
 }
 
-function findAutoload(): ?string {
-  $candidates = [
-    __DIR__ . "/vendor/autoload.php",
-    __DIR__ . "/../vendor/autoload.php",
-    __DIR__ . "/../../vendor/autoload.php",
-  ];
-  foreach ($candidates as $c) {
-    if (file_exists($c)) return $c;
-  }
-  return null;
+function loadPHPMailer(): void {
+  require_once __DIR__ . '/vendor/autoload.php';
 }
 
 function sendVerifyEmailPHPMailer(string $toEmail, string $token, array $smtp): array {
@@ -45,11 +37,7 @@ function sendVerifyEmailPHPMailer(string $toEmail, string $token, array $smtp): 
     FILE_APPEND
   );
 
-  $autoload = findAutoload();
-  if (!$autoload) {
-    return ["ok" => false, "error" => "PHPMailer não encontrado. Rode: composer require phpmailer/phpmailer"];
-  }
-  require_once $autoload;
+  loadPHPMailer();
 
   try {
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);

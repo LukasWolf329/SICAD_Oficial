@@ -5,25 +5,28 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
+  http_response_code(200);
+  exit();
 }
 
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") exit;
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS")
+  exit;
 
 require(__DIR__ . '/db.php'); // precisa criar $conn (mysqli)
 
 
 
-function respond($success, $message) {
+function respond($success, $message)
+{
   echo json_encode([
-    "success" => (bool)$success,
-    "message" => (string)$message
+    "success" => (bool) $success,
+    "message" => (string) $message
   ], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-function sendResetEmailPHPMailer(string $toEmail, string $token, array $smtpConfig): array {
+function sendResetEmailPHPMailer(string $toEmail, string $token, array $smtpConfig): array
+{
   // Log em DEV (ajuda a testar)
   @file_put_contents(
     __DIR__ . "/reset_links.log",
@@ -32,32 +35,19 @@ function sendResetEmailPHPMailer(string $toEmail, string $token, array $smtpConf
   );
 
   // autoload
-  $autoloadCandidates = [
-    __DIR__ . "/vendor/autoload.php",
-    __DIR__ . "/../vendor/autoload.php",
-    __DIR__ . "/../../vendor/autoload.php",
-  ];
 
-  $autoload = null;
-  foreach ($autoloadCandidates as $c) {
-    if (file_exists($c)) { $autoload = $c; break; }
-  }
 
-  if (!$autoload) {
-    return ["ok" => false, "error" => "PHPMailer não encontrado (vendor/autoload.php). Rode: composer require phpmailer/phpmailer"];
-  }
-
-  require_once $autoload;
+  require_once __DIR__ . '/vendor/autoload.php';
 
   try {
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     $mail->CharSet = "UTF-8";
     $mail->isSMTP();
-    $mail->Host       = 'smtp.gmail.com';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = 'sicad.certificados@gmail.com';
-    $mail->Password   = 'dtrt frya etbb ohhy';
-    $mail->Port       = 587;
+    $mail->Host = 'smtp.gmail.com';
+    $mail->SMTPAuth = true;
+    $mail->Username = 'sicad.certificados@gmail.com';
+    $mail->Password = 'dtrt frya etbb ohhy';
+    $mail->Port = 587;
 
     if ($smtpConfig["secure"] === "ssl") {
       $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
