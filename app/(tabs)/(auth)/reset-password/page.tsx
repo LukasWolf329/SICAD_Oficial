@@ -6,6 +6,26 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 import "../../../../style/global.css";
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 export default function ResetPassword() {
   const params = useLocalSearchParams();
   const tokenParam = typeof params.token === "string" ? params.token : "";
@@ -27,30 +47,69 @@ export default function ResetPassword() {
   }
 
   async function handleResetPassword() {
-    if (!token) {
+    const tokenNormalizado = token.trim();
+
+    if (!tokenNormalizado) {
       showAlert("Cole o token enviado no e-mail.");
       return;
     }
+
+    if (senha.length < 6) {
+      showAlert("A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
     if (senha !== confirmar) {
       showAlert("As senhas não coincidem.");
       return;
     }
 
     try {
-      //const response = await axios.post("http://localhost/SICAD_Oficial/controller/reset_password.php", {
-      const response = await axios.post("https://sicad.linceonline.com.br/controller/reset_password.php", {
-        token: token,
-        password: senha,
-      });
+      const response = await axios.post(
+        "https://sicad.linceonline.com.br/controller/reset_password.php",
+        {
+          token: tokenNormalizado,
+          password: senha,
+        },
+        { validateStatus: () => true }
+      );
 
-      if (response.data?.success) {
-        showAlert(response.data.message ?? "Senha atualizada!", "Tudo certo");
-        router.push("/(tabs)/(auth)/signin/page");
-      } else {
-        showAlert(response.data?.message ?? "Não foi possível redefinir agora.");
+      const data = parseApiResponse(response.data);
+
+      console.log("RESET RAW:", response.data);
+      console.log("RESET PARSED:", data);
+      console.log("RESET STATUS:", response.status);
+
+      if (!data || typeof data !== "object") {
+        showAlert("Resposta inválida do servidor.");
+        return;
       }
-    } catch (error) {
-      console.error("Erro na requisicao: ", error);
+
+      if (data.success) {
+        showAlert(data.message ?? "Senha atualizada!", "Tudo certo");
+        router.push("/(tabs)/(auth)/signin/page");
+        return;
+      }
+
+      showAlert(data.message ?? "Não foi possível redefinir agora.");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        console.log("RESET AXIOS ERROR:", {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+        });
+
+        const data = parseApiResponse(error.response?.data);
+
+        if (data?.message) {
+          showAlert(data.message);
+          return;
+        }
+      } else {
+        console.log("RESET UNKNOWN ERROR:", error);
+      }
+
       showAlert("Erro de conexão. Tente novamente.");
     }
   }

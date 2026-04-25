@@ -10,6 +10,39 @@ import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 import { useEffect } from "react";
 
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch { }
+
+  const inicioObj = texto.indexOf("{");
+  const inicioArr = texto.indexOf("[");
+
+  let inicio = -1;
+
+  if (inicioObj >= 0 && inicioArr >= 0) {
+    inicio = Math.min(inicioObj, inicioArr);
+  } else if (inicioObj >= 0) {
+    inicio = inicioObj;
+  } else if (inicioArr >= 0) {
+    inicio = inicioArr;
+  }
+
+  if (inicio >= 0) {
+    try {
+      return JSON.parse(texto.slice(inicio));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export default function Signup() {
   const [nome, setNome] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -27,7 +60,7 @@ export default function Signup() {
 
   const router = useRouter();
 
-  useEffect(() => { 
+  useEffect(() => {
     (async () => {
       await AsyncStorage.multiRemove(["userToken", "userName", "userId"]);
     })();
@@ -69,10 +102,9 @@ export default function Signup() {
       });
 
       const raw = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch {
+      const data: any = parseApiResponse(raw);
+
+      if (!data || typeof data !== "object") {
         showError("Resposta inválida do servidor (não veio JSON).");
         console.log("Resposta bruta do servidor:", raw);
         return;
@@ -104,15 +136,15 @@ export default function Signup() {
       });
 
       const raw = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(raw);
-      } catch {
+      const data: any = parseApiResponse(raw);
+
+      if (!data || typeof data !== "object") {
         setAlertVariant("error");
         setAlertTitle("Erro");
         setAlertMessage("Resposta inválida do servidor.");
         setNeedVerify(true);
         setAlertVisible(true);
+        console.log("Resposta bruta do servidor:", raw);
         return;
       }
 
@@ -188,7 +220,7 @@ export default function Signup() {
 
                 <View>
                   <Text className="text-2xl dark:color-white">E-mail</Text>
-                  <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
+                  <TextInput value={email} autoCorrect={false} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
                     className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4" />
                 </View>
 

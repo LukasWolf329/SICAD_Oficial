@@ -8,6 +8,26 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NiceAlert from "../../../../components/NiceAlert/NiceAlert";
 import "../../../../style/global.css";
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 export default function Login() {
   useAuthCheck();
 
@@ -48,7 +68,10 @@ export default function Login() {
   }
 
   async function handleSignIn() {
-    if (!email || !senha) {
+    const emailNormalizado = email.trim();
+    const senhaDigitada = senha; // não mexe na senha
+
+    if (!emailNormalizado || !senhaDigitada) {
       showError("Por favor, preencha todos os campos");
       return;
     }
@@ -56,14 +79,25 @@ export default function Login() {
     try {
       //const response = await axios.post("http://localhost/SICAD_Oficial/controller/login.php", {
       const response = await axios.post("https://sicad.linceonline.com.br/controller/login.php", {
-        email,
-        senha,
+        email: emailNormalizado,
+        senha: senhaDigitada,
       });
 
-      if (response.data?.success) {
-        const token = response.data.token;
-        const nome = response.data.usuario.nome;
-        const id = response.data.usuario.id;
+      const data = parseApiResponse(response.data);
+
+      console.log("LOGIN RAW:", response.data);
+      console.log("LOGIN PARSED:", data);
+      console.log("LOGIN TYPE:", typeof response.data);
+
+      if (!data || typeof data !== "object") {
+        showError("Resposta inválida do servidor.");
+        return;
+      }
+
+      if (data.success) {
+        const token = data.token;
+        const nome = data.usuario.nome;
+        const id = data.usuario.id;
 
         await AsyncStorage.setItem("userToken", token);
         await AsyncStorage.setItem("userName", nome);
@@ -73,22 +107,19 @@ export default function Login() {
         return;
       }
 
-      // AQUI: se não verificado, abre o modal com input
-      if (response.data?.code === "EMAIL_NOT_VERIFIED") {
+      if (data.code === "EMAIL_NOT_VERIFIED") {
         setVerifyToken("");
-        showVerify(response.data?.message ?? "Seu e-mail não foi verificado. Cole o token aqui.");
+        showVerify(data.message ?? "Seu e-mail não foi verificado. Cole o token aqui.");
         return;
       }
 
-      // erro normal
-      showError(response.data?.message ?? "Credenciais inválidas");
+      showError(data.message ?? "Credenciais inválidas");
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         console.log("AXIOS ERROR:", {
           message: error.message,
           status: error.response?.status,
           data: error.response?.data,
-          headers: error.response?.headers,
         });
       } else {
         console.log("UNKNOWN ERROR:", error);
@@ -146,7 +177,7 @@ export default function Login() {
     setAlertVariant("info");
     setAlertTitle("Recuperar senha");
     setAlertMessage("Digite seu e-mail para receber o código de redefinição.");
-    setForgotEmail("");
+    setForgotEmail(email.trim());
     setAlertVisible(true);
   }
 
@@ -162,23 +193,57 @@ export default function Login() {
 
     try {
       const response = await axios.post(
-        //"http://localhost/SICAD_Oficial/controller/forgot_password.php",
         "https://sicad.linceonline.com.br/controller/forgot_password.php",
-        { email: emailToSend }
+        { email: emailToSend },
+        { validateStatus: () => true }
       );
 
-      if (response.data?.success) {
+      const data = parseApiResponse(response.data);
+
+      console.log("FORGOT RAW:", response.data);
+      console.log("FORGOT PARSED:", data);
+      console.log("FORGOT STATUS:", response.status);
+
+      if (!data || typeof data !== "object") {
+        setAlertVariant("error");
+        setAlertTitle("Erro");
+        setAlertMessage("Resposta inválida do servidor.");
+        return;
+      }
+
+      if (data.success) {
         setIsForgotMode(false);
         setAlertVariant("success");
         setAlertTitle("Verifique seu e-mail");
-        setAlertMessage(response.data.message);
-      } else {
-        setAlertVariant("error");
-        setAlertTitle("Erro");
-        setAlertMessage(response.data?.message ?? "Não foi possível enviar o e-mail.");
+        setAlertMessage(
+          data.message ?? "Se o e-mail estiver cadastrado, você receberá um token para redefinir a senha."
+        );
+        return;
       }
-    } catch (error) {
-      console.error(error);
+
+      setAlertVariant("error");
+      setAlertTitle("Erro");
+      setAlertMessage(data.message ?? "Não foi possível enviar o e-mail.");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        console.log("FORGOT AXIOS ERROR:", {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+        });
+
+        const data = parseApiResponse(error.response?.data);
+
+        if (data?.message) {
+          setAlertVariant("error");
+          setAlertTitle("Erro");
+          setAlertMessage(data.message);
+          return;
+        }
+      } else {
+        console.log("FORGOT UNKNOWN ERROR:", error);
+      }
+
       setAlertVariant("error");
       setAlertTitle("Erro de conexão");
       setAlertMessage("Tente novamente.");
@@ -217,6 +282,10 @@ export default function Login() {
                     onChangeText={setEmail}
                     returnKeyType="next"
                     onSubmitEditing={() => senhaInputRef.current?.focus()}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
                     className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
                   />
                 </SafeAreaView>
@@ -234,6 +303,9 @@ export default function Login() {
                     ref={senhaInputRef}
                     returnKeyType="go"
                     onSubmitEditing={handleSignIn}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="password"
                     className="w-full h-12 bg-transparent border border-slate-700 rounded-xl dark:color-white text-lg px-4"
                   />
                 </SafeAreaView>
@@ -252,7 +324,7 @@ export default function Login() {
           </form>
 
           <Pressable onPress={handleForgotPassword}>
-            <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha ?</Text>
+            <Text className="dark:color-white underline text-xl mt-4">Esqueceu sua senha?</Text>
           </Pressable>
 
           <Link href="/(tabs)/(auth)/reset-password/page" className="dark:color-white underline text-xl mt-2">

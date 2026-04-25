@@ -28,6 +28,27 @@ interface Evento {
   total_participantes: number | null;
 }
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+
 /* ------------------------------------------------------
    NAVBAR
 -------------------------------------------------------*/
@@ -74,12 +95,20 @@ export function NavBar() {
         );
 
         const raw = await response.text();
-        console.log("RAW dropdown:", raw);
+        console.log("dropdown status:", response.status);
+        console.log("dropdown content-type:", response.headers.get("content-type"));
+        console.log("RAW dropdown:", JSON.stringify(raw));
 
-        let data: any;
-        try {
-          data = JSON.parse(raw);
-        } catch {
+
+        if (!response.ok) {
+          console.error("HTTP ERROR dropdown:", response.status, raw);
+          setEvento([]);
+          return;
+        }
+
+        const data = parseApiResponse(raw);
+
+        if (!data || typeof data !== "object") {
           console.error("get_dropdown_eventos.php não retornou JSON válido");
           setEvento([]);
           return;

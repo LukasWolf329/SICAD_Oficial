@@ -5,21 +5,37 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
+  http_response_code(200);
+  exit();
 }
 
 
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") exit;
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS")
+  exit;
 
 require(__DIR__ . '/db.php');
 
-function respond($success, $message, $extra = []) {
+function respond($success, $message, $extra = [])
+{
   echo json_encode(array_merge([
-    "success" => (bool)$success,
-    "message" => (string)$message
+    "success" => (bool) $success,
+    "message" => (string) $message
   ], $extra), JSON_UNESCAPED_UNICODE);
   exit;
+}
+
+// limpa usuários não verificados com token expirado
+$stmt = $conn->prepare("
+  DELETE u, v
+  FROM usuario u
+  JOIN verificacao_email v ON v.id_usuario = u.ID
+  WHERE u.email_verificado = 0
+    AND v.expira_em <= NOW()
+");
+
+if ($stmt) {
+  $stmt->execute();
+  $stmt->close();
 }
 
 $input = json_decode(file_get_contents("php://input"), true);
@@ -42,7 +58,7 @@ if (!$found) {
   respond(false, "Token inválido ou expirado.");
 }
 
-if ((int)$emailVerificado === 1) {
+if ((int) $emailVerificado === 1) {
   respond(true, "E-mail já estava verificado.");
 }
 

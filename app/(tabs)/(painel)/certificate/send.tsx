@@ -29,6 +29,67 @@ export default function SendCerticate() {
 
   const [busca, setBusca] = useState("");
 
+  function parseApiResponse(raw: unknown) {
+    if (typeof raw !== "string") return raw;
+
+    const texto = raw.trim();
+
+    try {
+      return JSON.parse(texto);
+    } catch { }
+
+    const inicioObj = texto.indexOf("{");
+    const inicioArr = texto.indexOf("[");
+
+    let inicio = -1;
+
+    if (inicioObj >= 0 && inicioArr >= 0) {
+      inicio = Math.min(inicioObj, inicioArr);
+    } else if (inicioObj >= 0) {
+      inicio = inicioObj;
+    } else if (inicioArr >= 0) {
+      inicio = inicioArr;
+    }
+
+    if (inicio >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicio));
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    const raw = await res.text();
+
+    console.log("API URL:", url);
+    console.log("API STATUS:", res.status);
+    console.log("API CONTENT-TYPE:", res.headers.get("content-type"));
+    console.log("API RAW:", JSON.stringify(raw));
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${raw}`);
+    }
+
+    const data = parseApiResponse(raw);
+
+    if (!data || typeof data !== "object") {
+      throw new Error(`Resposta inválida do servidor em ${url}`);
+    }
+
+    return data as any;
+  }
+
   // 1) Descobrir o último evento do usuário + (opcional) nome do evento
   useEffect(() => {
     let alive = true;
@@ -52,14 +113,10 @@ export default function SendCerticate() {
 
         // (Opcional) pegar nome do evento pra mostrar no Mainframe
         //const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
-        const res = await fetch("https://sicad.linceonline.com.br/controller/page-org.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ evento_id: lastId }),
-        });
-
-        const json = await res.json();
-        if (!alive) return;
+        const json = await postJsonSafe(
+          "https://sicad.linceonline.com.br/controller/page-org.php",
+          { evento_id: lastId }
+        );
 
         setEventoNome(json?.evento_nome ?? "Evento");
       } catch (err) {
@@ -83,13 +140,11 @@ export default function SendCerticate() {
 
 
     //fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
-    fetch(`https://sicad.linceonline.com.br/controller/get_certificado.php?t=${Date.now()}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evento_id: eventoId }),
-      signal: controller.signal,
-    })
-      .then((res) => res.json())
+    postJsonSafe(
+      `https://sicad.linceonline.com.br/controller/get_certificado.php?t=${Date.now()}`,
+      { evento_id: eventoId },
+      controller.signal
+    )
       .then((data) => {
         const lista = Array.isArray(data) ? data : data?.certificados ?? [];
 
@@ -131,26 +186,26 @@ export default function SendCerticate() {
   };
 
   const handleSendOne = async (cod_certificado: number) => {
-    //const res = await fetch("http://localhost/SICAD_Oficial/controller/enviar_certificado.php", {
-    const res = await fetch("https://sicad.linceonline.com.br/controller/enviar_certificado.php", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cod_certificado }),
-    });
-
-    const raw = await res.text();
-    console.log("HTTP:", res.status);
-    console.log("RAW:", raw);
-
-    let data: any;
-    try { data = JSON.parse(raw); } catch { return; }
-
-    if (data.success) {
-      setCertificados(prev =>
-        prev.map(c => c.cod_certificado === cod_certificado ? { ...c, status: 1 } : c)
+    try {
+      const data = await postJsonSafe(
+        "https://sicad.linceonline.com.br/controller/enviar_certificado.php",
+        { cod_certificado }
       );
-    } else {
-      alert(data.message);
+
+      if (data.success) {
+        setCertificados((prev) =>
+          prev.map((c) =>
+            c.cod_certificado === cod_certificado
+              ? { ...c, status: Number(data.status ?? 1) }
+              : c
+          )
+        );
+      } else {
+        alert(data.message ?? "Falha ao enviar certificado");
+      }
+    } catch (err) {
+      console.error("Erro ao enviar certificado:", err);
+      alert("Falha ao enviar certificado");
     }
   };
 

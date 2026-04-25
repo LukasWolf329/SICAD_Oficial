@@ -1,17 +1,103 @@
 <?php
+ob_start();
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(200);
+  http_response_code(204);
   exit;
 }
 
 ini_set('display_errors', '0');
 ini_set('html_errors', '0');
 error_reporting(E_ALL);
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+
+function respond(int $status, array $payload): void
+{
+  if (ob_get_length()) {
+    ob_clean();
+  }
+
+  http_response_code($status);
+
+  $json = json_encode(
+    $payload,
+    JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+  );
+
+  if ($json === false) {
+    http_response_code(500);
+    echo '{"success":false,"message":"Falha ao gerar JSON"}';
+    exit;
+  }
+
+  echo $json;
+  exit;
+}
+
+function pngHasTransparency(string $filePath): bool
+{
+  $fp = @fopen($filePath, 'rb');
+  if (!$fp) {
+    return false;
+  }
+
+  $signature = fread($fp, 8);
+  if ($signature !== "\x89PNG\r\n\x1a\n") {
+    fclose($fp);
+    return false;
+  }
+
+  while (!feof($fp)) {
+    $lenBytes = fread($fp, 4);
+    if (strlen($lenBytes) !== 4)
+      break;
+
+    $length = unpack("N", $lenBytes)[1];
+    $type = fread($fp, 4);
+    if (strlen($type) !== 4)
+      break;
+
+    if ($type === "IHDR") {
+      $data = fread($fp, $length);
+      if (strlen($data) >= 10) {
+        $colorType = ord($data[9]);
+
+        // 4 = grayscale + alpha, 6 = RGBA
+        if ($colorType === 4 || $colorType === 6) {
+          fclose($fp);
+          return true;
+        }
+      }
+
+      fread($fp, 4); // CRC
+      continue;
+    }
+
+    // PNG palette com transparência
+    if ($type === "tRNS") {
+      fclose($fp);
+      return true;
+    }
+
+    fseek($fp, $length + 4, SEEK_CUR); // pula chunk + CRC
+
+    if ($type === "IEND") {
+      break;
+    }
+  }
+
+  fclose($fp);
+  return false;
+}
 
 $raw = file_get_contents('php://input');
 $input = json_decode($raw, true);
@@ -20,23 +106,20 @@ $input = json_decode($raw, true);
 
 
 if (!is_array($input)) {
-  echo json_encode(["success" => false, "message" => "Body não veio como JSON válido", "raw" => $raw]);
-  exit;
+  respond(400, [
+    "success" => false,
+    "message" => "Body não veio como JSON válido",
+    "raw" => $raw
+  ]);
 }
 
 $certCode = trim((string) ($input['cod_certificado'] ?? ''));
 if ($certCode === '') {
-  echo json_encode(["success" => false, "message" => "cod_certificado não informado"]);
-  exit;
+  respond(400, [
+    "success" => false,
+    "message" => "cod_certificado não informado"
+  ]);
 }
-
-
-require('db.php');
-require_once __DIR__ . '/../vendor/autoload.php';
-
-use PHPMailer\PHPMailer\PHPMailer;
-
-
 
 try {
 
@@ -65,8 +148,10 @@ LIMIT 1
   $row = $stmt->get_result()->fetch_assoc();
 
   if (!$row) {
-    echo json_encode(["success" => false, "message" => "Certificado não encontrado"]);
-    exit;
+    respond(404, [
+      "success" => false,
+      "message" => "Certificado não encontrado"
+    ]);
   }
 
   if (empty($row['cod_certificado'])) {
@@ -150,11 +235,21 @@ LIMIT 1
       return array_key_exists($k, $map) ? (string) $map[$k] : '';
     }, (string) $text);
   }
-
   $imgPath = resolve_local_image_path($row['imagem_preview']);
   $template = decode_json_safe($row['template_json']);
-  if (!$template)
+
+  if (!$template) {
     throw new Exception("template_json inválido");
+  }
+
+  $ext = strtolower(pathinfo($imgPath, PATHINFO_EXTENSION));
+
+  if ($ext === 'png' && pngHasTransparency($imgPath)) {
+    respond(500, [
+      "success" => false,
+      "message" => "A imagem base do certificado está em PNG com transparência. O servidor atual não tem GD/Imagick para processar esse arquivo. Converta a imagem para JPG ou PNG sem transparência."
+    ]);
+  }
 
   $bg = $template['backgroundImage'] ?? null;
   if (!is_array($bg) || empty($bg['width']) || empty($bg['height'])) {
@@ -167,15 +262,13 @@ LIMIT 1
   $codigoFormatado = implode('-', str_split(strtoupper($row['cod_certificado']), 4));
 
   $map = [
-    "NOME" => $row['nome_usuario'],
-    "ATIVIDADE" => $row['nome_atividade'],
-    "ASSINATURA" => $row['nome_palestrante'],
-    "PALESTRANTE" => $row['nome_palestrante'],
-    "CODIGO" => $codigoFormatado, 
+    "NOME" => (string) ($row['nome_usuario'] ?? ''),
+    "ATIVIDADE" => (string) ($row['nome_atividade'] ?? ''),
+    "ASSINATURA" => (string) ($row['nome_palestrante'] ?? ''),
+    "PALESTRANTE" => (string) ($row['nome_palestrante'] ?? ''),
+    "CODIGO" => $codigoFormatado,
   ];
 
-
-  // ===== PDF =====
   $pdfPath = sys_get_temp_dir() . "/certificado_" . $row['cod_certificado'] . ".pdf";
 
   $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
@@ -190,8 +283,12 @@ LIMIT 1
   if (method_exists($pdf, 'setCellMargins'))
     $pdf->setCellMargins(0, 0, 0, 0);
 
-  // fundo
-  $pdf->Image($imgPath, 0, 0, 297, 210, 'PNG');
+  $fileType = strtoupper($ext);
+  if ($fileType === 'JPG') {
+    $fileType = 'JPEG';
+  }
+
+  $pdf->Image($imgPath, 0, 0, 297, 210, $fileType);
 
   // escala
   $pageW = 297.0;
@@ -338,53 +435,58 @@ LIMIT 1
     return [$lineStyle, $fillColor, $alpha];
   }
 
-  function fabric_src_to_file(string $src): array {
-  $src = trim($src);
-  if ($src === '') {
-    throw new Exception("Imagem do Fabric sem src");
-  }
-
-  // data:image/png;base64,...
-  if (preg_match('#^data:image/([^;]+);base64,#i', $src, $m)) {
-    $mime = strtolower($m[1]); // png, jpeg, webp...
-    $ext = $mime;
-    if ($ext === 'jpeg') $ext = 'jpg';
-    if ($ext === 'svg+xml') $ext = 'svg';
-
-    $commaPos = strpos($src, ',');
-    if ($commaPos === false) throw new Exception("DataURL inválido (sem vírgula)");
-    $b64 = substr($src, $commaPos + 1);
-
-    $bin = base64_decode($b64, true);
-    if ($bin === false) {
-      throw new Exception("Base64 da imagem inválido");
+  function fabric_src_to_file(string $src): array
+  {
+    $src = trim($src);
+    if ($src === '') {
+      throw new Exception("Imagem do Fabric sem src");
     }
 
-    $tmp = sys_get_temp_dir() . "/fabric_img_" . uniqid() . "." . $ext;
-    if (@file_put_contents($tmp, $bin) === false) {
-      throw new Exception("Não consegui gravar imagem temporária em: $tmp");
+    // data:image/png;base64,...
+    if (preg_match('#^data:image/([^;]+);base64,#i', $src, $m)) {
+      $mime = strtolower($m[1]); // png, jpeg, webp...
+      $ext = $mime;
+      if ($ext === 'jpeg')
+        $ext = 'jpg';
+      if ($ext === 'svg+xml')
+        $ext = 'svg';
+
+      $commaPos = strpos($src, ',');
+      if ($commaPos === false)
+        throw new Exception("DataURL inválido (sem vírgula)");
+      $b64 = substr($src, $commaPos + 1);
+
+      $bin = base64_decode($b64, true);
+      if ($bin === false) {
+        throw new Exception("Base64 da imagem inválido");
+      }
+
+      $tmp = sys_get_temp_dir() . "/fabric_img_" . uniqid() . "." . $ext;
+      if (@file_put_contents($tmp, $bin) === false) {
+        throw new Exception("Não consegui gravar imagem temporária em: $tmp");
+      }
+
+      return [$tmp, strtoupper($ext), true]; // (arquivo, tipo TCPDF, é temporário?)
     }
 
-    return [$tmp, strtoupper($ext), true]; // (arquivo, tipo TCPDF, é temporário?)
-  }
-
-  // http(s)://...
-  if (preg_match('#^https?://#i', $src)) {
-    $bin = @file_get_contents($src);
-    if ($bin === false) {
-      throw new Exception("Não consegui baixar imagem: $src (allow_url_fopen desativado?)");
+    // http(s)://...
+    if (preg_match('#^https?://#i', $src)) {
+      $bin = @file_get_contents($src);
+      if ($bin === false) {
+        throw new Exception("Não consegui baixar imagem: $src (allow_url_fopen desativado?)");
+      }
+      $tmp = sys_get_temp_dir() . "/fabric_img_" . uniqid() . ".png";
+      file_put_contents($tmp, $bin);
+      return [$tmp, 'PNG', true];
     }
-    $tmp = sys_get_temp_dir() . "/fabric_img_" . uniqid() . ".png";
-    file_put_contents($tmp, $bin);
-    return [$tmp, 'PNG', true];
-  }
 
-  // caminho local do servidor (caso você um dia salve imagem como arquivo)
-  $local = resolve_local_image_path($src);
-  $ext = strtolower(pathinfo($local, PATHINFO_EXTENSION) ?: 'png');
-  if ($ext === 'jpeg') $ext = 'jpg';
-  return [$local, strtoupper($ext), false];
-}
+    // caminho local do servidor (caso você um dia salve imagem como arquivo)
+    $local = resolve_local_image_path($src);
+    $ext = strtolower(pathinfo($local, PATHINFO_EXTENSION) ?: 'png');
+    if ($ext === 'jpeg')
+      $ext = 'jpg';
+    return [$local, strtoupper($ext), false];
+  }
 
   function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale, float $offX, float $offY, array $map): void
   {
@@ -541,39 +643,45 @@ LIMIT 1
       return;
     }
 
-        // ===== IMAGENS (fabric.Image) =====
+    // ===== IMAGENS (fabric.Image) =====
     if ($type === 'image') {
-      $src = (string)($obj['src'] ?? '');
+      $src = (string) ($obj['src'] ?? '');
       if ($src === '') {
-        if ($setAlpha) $pdf->SetAlpha(1);
+        if ($setAlpha)
+          $pdf->SetAlpha(1);
         return;
       }
 
       // Imagem usa "opacity", não fill/stroke
-      $opacity = (float)($obj['opacity'] ?? 1);
-      if ($setAlpha) $pdf->SetAlpha(max(0, min(1, $opacity)));
+      $opacity = (float) ($obj['opacity'] ?? 1);
+      if ($setAlpha)
+        $pdf->SetAlpha(max(0, min(1, $opacity)));
 
       // tamanho base do objeto no Fabric
       [$w, $h] = get_obj_wh($obj);
 
-      $sxAbs = abs((float)($obj['scaleX'] ?? 1));
-      $syAbs = abs((float)($obj['scaleY'] ?? 1));
+      $sxAbs = abs((float) ($obj['scaleX'] ?? 1));
+      $syAbs = abs((float) ($obj['scaleY'] ?? 1));
       $scaledWpx = $w * $sxAbs;
       $scaledHpx = $h * $syAbs;
 
       // posição do canto superior esquerdo (sem rotação), respeitando originX/originY
-      $originX = strtolower((string)($obj['originX'] ?? 'left'));
-      $originY = strtolower((string)($obj['originY'] ?? 'top'));
-      $left = (float)($obj['left'] ?? 0);
-      $top  = (float)($obj['top']  ?? 0);
+      $originX = strtolower((string) ($obj['originX'] ?? 'left'));
+      $originY = strtolower((string) ($obj['originY'] ?? 'top'));
+      $left = (float) ($obj['left'] ?? 0);
+      $top = (float) ($obj['top'] ?? 0);
 
       $xPx = $left;
-      if ($originX === 'center') $xPx = $left - ($scaledWpx / 2);
-      elseif ($originX === 'right') $xPx = $left - $scaledWpx;
+      if ($originX === 'center')
+        $xPx = $left - ($scaledWpx / 2);
+      elseif ($originX === 'right')
+        $xPx = $left - $scaledWpx;
 
       $yPx = $top;
-      if ($originY === 'center') $yPx = $top - ($scaledHpx / 2);
-      elseif ($originY === 'bottom') $yPx = $top - $scaledHpx;
+      if ($originY === 'center')
+        $yPx = $top - ($scaledHpx / 2);
+      elseif ($originY === 'bottom')
+        $yPx = $top - $scaledHpx;
 
       // converte pra mm
       [$xMm, $yMm] = px_to_mm($xPx, $yPx, $scale, $offX, $offY);
@@ -587,7 +695,7 @@ LIMIT 1
       // resolve src -> arquivo
       [$imgFile, $imgType, $isTmp] = fabric_src_to_file($src);
 
-      $angle = (float)($obj['angle'] ?? 0);
+      $angle = (float) ($obj['angle'] ?? 0);
       $flipX = !empty($obj['flipX']);
       $flipY = !empty($obj['flipY']);
 
@@ -597,8 +705,10 @@ LIMIT 1
         $pdf->StartTransform();
 
         // Flip primeiro, depois Rotate (mesma ordem lógica: Scale/Flip -> Rotate)
-        if ($flipX && method_exists($pdf, 'MirrorH')) $pdf->MirrorH($cxMm);
-        if ($flipY && method_exists($pdf, 'MirrorV')) $pdf->MirrorV($cyMm);
+        if ($flipX && method_exists($pdf, 'MirrorH'))
+          $pdf->MirrorH($cxMm);
+        if ($flipY && method_exists($pdf, 'MirrorV'))
+          $pdf->MirrorV($cyMm);
 
         if (abs($angle) > 0.001 && method_exists($pdf, 'Rotate')) {
           $pdf->Rotate($angle, $cxMm, $cyMm);
@@ -611,9 +721,11 @@ LIMIT 1
         $pdf->StopTransform();
       }
 
-      if ($isTmp && is_file($imgFile)) @unlink($imgFile);
+      if ($isTmp && is_file($imgFile))
+        @unlink($imgFile);
 
-      if ($setAlpha) $pdf->SetAlpha(1);
+      if ($setAlpha)
+        $pdf->SetAlpha(1);
       return;
     }
     // ===== FORMAS =====
@@ -762,15 +874,14 @@ LIMIT 1
     unlink($pdfPath);
 
 
-  echo json_encode([
+  respond(200, [
     "success" => true,
     "message" => "Certificado enviado com sucesso",
     "status" => $statusAtual
   ]);
 
 } catch (Throwable $e) {
-  http_response_code(500);
-  echo json_encode([
+  respond(500, [
     "success" => false,
     "message" => $e->getMessage()
   ]);

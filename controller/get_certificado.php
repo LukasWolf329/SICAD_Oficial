@@ -1,50 +1,74 @@
 <?php
-// CORS (dev)
+ob_start();
+
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
-header("Access-Control-Max-Age: 86400");
-
-// Responde preflight
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(204);
-  exit;
-}
-
-// Seu restante:
+header("Content-Type: application/json; charset=UTF-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
-header("Content-Type: application/json; charset=UTF-8");
 
-require('db.php');
-
-
-$eventoId = null;
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $input = json_decode(file_get_contents('php://input'), true);
-  $eventoId = $input['evento_id'] ?? null;
-} else {
-  $eventoId = $_GET['evento_id'] ?? null;
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(204);
+    exit;
 }
 
-$eventoId = filter_var($eventoId, FILTER_VALIDATE_INT);
+ini_set("display_errors", "0");
+ini_set("html_errors", "0");
+error_reporting(E_ALL);
 
-if (!$eventoId) {
-  http_response_code(400);
-  echo json_encode(["success" => false, "message" => "evento_id inválido"]);
-  exit;
+require_once __DIR__ . "/db.php";
+
+function respond(int $status, array $payload): void
+{
+    if (ob_get_length()) {
+        ob_clean();
+    }
+
+    http_response_code($status);
+
+    $json = json_encode(
+        $payload,
+        JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+
+    if ($json === false) {
+        http_response_code(500);
+        echo '{"success":false,"certificados":[],"message":"Falha ao gerar JSON"}';
+        exit;
+    }
+
+    echo $json;
+    exit;
 }
 
+$input = json_decode(file_get_contents("php://input"), true);
 
+if (!is_array($input)) {
+    respond(400, [
+        "success" => false,
+        "certificados" => [],
+        "message" => "Body JSON inválido"
+    ]);
+}
+
+$eventoId = isset($input["evento_id"]) ? (int)$input["evento_id"] : 0;
+
+if ($eventoId <= 0) {
+    respond(400, [
+        "success" => false,
+        "certificados" => [],
+        "message" => "evento_id não enviado ou inválido"
+    ]);
+}
 
 $sql = "
-SELECT
-  c.codigo AS cod_certificado,
-  u.nome   AS participante,
-  u.email  AS email,
-  IFNULL(c.status_envio, 0) AS status
+SELECT DISTINCT
+    c.codigo AS cod_certificado,
+    u.nome   AS participante,
+    u.email  AS email,
+    IFNULL(c.status_envio, 0) AS status
 FROM certificado c
 JOIN usuario u ON u.ID = c.fk_Usuario_ID
 JOIN atividade a ON a.ID = c.fk_Atividade_ID
@@ -53,15 +77,53 @@ ORDER BY u.nome ASC
 ";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $eventoId);
-$stmt->execute();
-$res = $stmt->get_result();
 
-$out = [];
-while ($row = $res->fetch_assoc()) {
-  $row['cod_certificado'] = (int)$row['cod_certificado'];
-  $row['status'] = (int)$row['status']; // <- força 0/1 como número
-  $out[] = $row;
+if (!$stmt) {
+    respond(500, [
+        "success" => false,
+        "certificados" => [],
+        "message" => "Erro ao preparar consulta",
+        "debug" => $conn->error
+    ]);
 }
 
-echo json_encode($out, JSON_UNESCAPED_UNICODE);
+$stmt->bind_param("i", $eventoId);
+
+if (!$stmt->execute()) {
+    respond(500, [
+        "success" => false,
+        "certificados" => [],
+        "message" => "Erro ao executar consulta",
+        "debug" => $stmt->error
+    ]);
+}
+
+$res = $stmt->get_result();
+
+if (!$res) {
+    respond(500, [
+        "success" => false,
+        "certificados" => [],
+        "message" => "Erro ao obter resultado",
+        "debug" => $stmt->error
+    ]);
+}
+
+$out = [];
+
+while ($row = $res->fetch_assoc()) {
+    $out[] = [
+        "cod_certificado" => (int)($row["cod_certificado"] ?? 0),
+        "participante" => (string)($row["participante"] ?? ""),
+        "email" => (string)($row["email"] ?? ""),
+        "status" => (int)($row["status"] ?? 0),
+    ];
+}
+
+$stmt->close();
+$conn->close();
+
+respond(200, [
+    "success" => true,
+    "certificados" => $out
+]);

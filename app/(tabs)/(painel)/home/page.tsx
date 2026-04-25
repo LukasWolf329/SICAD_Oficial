@@ -10,6 +10,26 @@ import { useLocalSearchParams, router } from "expo-router";
 import { setLastEventoId, setLastEventoNome } from "../../../utils/lastEvento";
 import { useEventosModal } from "@/components/NavBar/EventosModalContext";
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
 export default function HomePage() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id; // garante string
@@ -20,34 +40,34 @@ export default function HomePage() {
   const [totalCertificados, setTotalCertificados] = useState(0);
   const [eventoNome, setEventoNome] = useState("Evento");
 
-  const {openEventos} = useEventosModal();
+  const { openEventos } = useEventosModal();
   // 1) Se entrou aqui sem id, tenta recuperar do storage e redireciona
   useEffect(() => {
-  let ativo = true;
+    let ativo = true;
 
-  (async () => {
-    if (rawId) return;
+    (async () => {
+      if (rawId) return;
 
-    const userId = await AsyncStorage.getItem("userId");
-    const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
-    const lastEventoId = await AsyncStorage.getItem(key);
+      const userId = await AsyncStorage.getItem("userId");
+      const key = userId ? `lastEventoId:${userId}` : "lastEventoId";
+      const lastEventoId = await AsyncStorage.getItem(key);
 
-    if (!ativo) return;
+      if (!ativo) return;
 
-    if (lastEventoId) {
-      router.replace({
-        pathname: "/(tabs)/(painel)/home/page",
-        params: { id: lastEventoId },
-      });
-    } else {
-      openEventos(); // ✅ aqui abre o modal da navbar
-    }
-  })();
+      if (lastEventoId) {
+        router.replace({
+          pathname: "/(tabs)/(painel)/home/page",
+          params: { id: lastEventoId },
+        });
+      } else {
+        openEventos(); // ✅ aqui abre o modal da navbar
+      }
+    })();
 
-  return () => {
-    ativo = false;
-  };
-}, [rawId, openEventos]);
+    return () => {
+      ativo = false;
+    };
+  }, [rawId, openEventos]);
 
   // 2) Sempre que tiver id válido, salva como "último evento"
   useEffect(() => {
@@ -63,9 +83,9 @@ export default function HomePage() {
   // 3) Fetch do backend (agora depende do id!)
   useEffect(() => {
     if (!rawId || Number.isNaN(eventoId)) return;
-
+    
     const controller = new AbortController();
-
+    
     //fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
     fetch("https://sicad.linceonline.com.br/controller/page-org.php", {
       method: "POST",
@@ -73,20 +93,37 @@ export default function HomePage() {
       body: JSON.stringify({ evento_id: eventoId }),
       signal: controller.signal,
     })
-      .then((res) => res.json())
-      .then(async (json) => {
+      .then(async (res) => {
+        const raw = await res.text();
+
+        console.log("page-org status:", res.status);
+        console.log("page-org content-type:", res.headers.get("content-type"));
+        console.log("RAW page-org:", JSON.stringify(raw));
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${raw}`);
+        }
+
+        const json = parseApiResponse(raw);
+
+        if (!json || typeof json !== "object") {
+          throw new Error("page-org.php não retornou JSON válido");
+        }
+
+        return json;
+      })
+      .then(async (json: any) => {
         const nome = json.evento_nome ?? "Evento";
 
         setEventoNome(nome);
-        setTotalInscritos(json.total_participantes ?? 0);
-        setAtividadesCadastradas(json.atividades_cadastradas ?? 0);
-        setTotalCertificados(json.total_certificados ?? 0);
+        setTotalInscritos(Number(json.total_participantes ?? 0));
+        setAtividadesCadastradas(Number(json.atividades_cadastradas ?? 0));
+        setTotalCertificados(Number(json.total_certificados ?? 0));
+
         const userId = await AsyncStorage.getItem("userId");
-        await setLastEventoId(eventoId, userId);     
+        await setLastEventoId(eventoId, userId);
         await setLastEventoNome(nome, userId);
-
       })
-
       .catch((err) => {
         if (err?.name !== "AbortError") {
           console.error("Erro ao buscar os dados:", err);

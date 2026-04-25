@@ -11,6 +11,54 @@ import { getLastEventoId } from "@/app/utils/lastEvento";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLastEventoNome } from "@/app/utils/lastEvento";
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  const raw = await res.text();
+
+  console.log("API URL:", url);
+  console.log("API STATUS:", res.status);
+  console.log("API CONTENT-TYPE:", res.headers.get("content-type"));
+  console.log("API RAW:", JSON.stringify(raw));
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${raw}`);
+  }
+
+  const data = parseApiResponse(raw);
+
+  if (!data || typeof data !== "object") {
+    throw new Error(`Resposta inválida do servidor em ${url}`);
+  }
+
+  return data as any;
+}
+
 type Certificado = {
   titulo: string;
   atividade_id: number;
@@ -48,13 +96,11 @@ export default function Certicate() {
 
         // (Opcional) Buscar nome do evento pra mostrar no Mainframe
         // Se você já tem um endpoint melhor, use ele.
-        const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ evento_id: lastId }),
-        });
-
-        const json = await res.json();
+        //const res = await fetch("http://localhost/SICAD_Oficial/controller/page-org.php", {
+        const json = await postJsonSafe(
+          "https://sicad.linceonline.com.br/controller/page-org.php",
+          { evento_id: lastId }
+        );
         if (!alive) return;
 
         setEventoNome(json?.evento_nome ?? "Evento");
@@ -76,14 +122,12 @@ export default function Certicate() {
 
     const controller = new AbortController();
     setLoadingCertificados(true);
-
-    fetch("http://localhost/SICAD_Oficial/controller/certificado.php", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evento_id: eventoId }),
-      signal: controller.signal,
-    })
-      .then((res) => res.json())
+    //fetch("http://localhost/SICAD_Oficial/controller/certificado.php", {
+    postJsonSafe(
+      "https://sicad.linceonline.com.br/controller/certificado.php",
+      { evento_id: eventoId },
+      controller.signal
+    )
       .then((data) => {
         // dependendo do seu backend, pode vir em data.certificados ou direto no array
         const lista = Array.isArray(data) ? data : (data?.certificados ?? []);

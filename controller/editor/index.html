@@ -180,10 +180,14 @@
   <div id="templatesPanel">
     <h4>Modelos</h4>
     <div id="templates">
-      <img src="/SICAD_Oficial/controller/assets/certificados/Certificado_1.png" alt="Template 1" onclick="setTemplate(this.src)">
-      <img src="/SICAD_Oficial/controller/assets/certificados/Certificado_2.png" alt="Template 2" onclick="setTemplate(this.src)">
-      <img src="/SICAD_Oficial/controller/assets/certificados/Certificado_3.png" alt="Template 3" onclick="setTemplate(this.src)">
-      <img src="/SICAD_Oficial/controller/assets/certificados/Certificado_4.png" alt="Template 4" onclick="setTemplate(this.src)">
+      <img src="https://sicad.linceonline.com.br/controller/assets/certificados/Certificado_1.jpg" alt="Template 1"
+        onclick="setTemplate(this.src)">
+      <img src="https://sicad.linceonline.com.br/controller/assets/certificados/Certificado_2.jpg" alt="Template 2"
+        onclick="setTemplate(this.src)">
+      <img src="https://sicad.linceonline.com.br/controller/assets/certificados/Certificado_3.jpg" alt="Template 3"
+        onclick="setTemplate(this.src)">
+      <img src="https://sicad.linceonline.com.br/controller/assets/certificados/Certificado_4.jpg" alt="Template 4"
+        onclick="setTemplate(this.src)">
     </div>
 
   </div>
@@ -358,11 +362,11 @@
       localStorage.setItem('savedCanvas', jsonString);
 
       const previewImage = canvas.toDataURL({
-        format: 'png',
+        format: 'jpeg',
+        quality: 0.95,
         multiplier: 3
       });
 
-      //fetch('http://localhost/SICAD_Oficial/controller/salvarTemplate.php', {
       fetch('https://sicad.linceonline.com.br/controller/salvarTemplate.php', {
         method: 'POST',
         headers: {
@@ -374,7 +378,28 @@
           imagem_src: selectedTemplateSrc,
           canvas_image: previewImage
         }),
-      });
+      })
+        .then(async (response) => {
+          const raw = await response.text();
+          console.log("RAW salvarTemplate:", raw);
+
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch (e) {
+            throw new Error("Resposta inválida do servidor: " + raw);
+          }
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || "Erro ao salvar template");
+          }
+
+          alert("Template salvo com sucesso.");
+        })
+        .catch((error) => {
+          console.error("Erro ao salvar template:", error);
+          alert("Erro ao salvar template: " + error.message);
+        });
     }
 
 
@@ -385,7 +410,7 @@
         return;
       }
 
-      fetch('http://localhost/SICAD_Oficial/controller/getTemplate.php?atividade_id=' + encodeURIComponent(atividade_id))
+      //fetch('http://localhost/SICAD_Oficial/controller/getTemplate.php?atividade_id=' + encodeURIComponent(atividade_id))
       fetch('https://sicad.linceonline.com.br/controller/getTemplate.php?atividade_id=' + encodeURIComponent(atividade_id))
         .then(response => response.json())
         .then(data => {
@@ -397,11 +422,10 @@
           }
 
           // Se não tiver template salvo ainda, só não faz nada
-          if (!data.template.json) {
+          if (!data.template || !data.template.json) {
             console.log(data.message || "Nenhum template salvo para essa atividade.");
             return;
           }
-
 
           // O que veio do banco é uma string JSON; precisamos fazer parse
           const jsonObject = JSON.parse(data.template.json);

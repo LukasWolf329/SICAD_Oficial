@@ -19,11 +19,62 @@ import { useLocalSearchParams, router } from "expo-router";
 import { setLastEventoId, setLastEventoNome } from "../../../utils/lastEvento";
 import { useEventosModal } from "@/components/NavBar/EventosModalContext";
 
+function parseApiResponse(raw: unknown) {
+  if (typeof raw !== "string") return raw;
+
+  const texto = raw.trim();
+
+  try {
+    return JSON.parse(texto);
+  } catch {
+    const inicioJson = texto.indexOf("{");
+
+    if (inicioJson >= 0) {
+      try {
+        return JSON.parse(texto.slice(inicioJson));
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+}
+
+async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  const raw = await res.text();
+
+  console.log("API URL:", url);
+  console.log("API STATUS:", res.status);
+  console.log("API CONTENT-TYPE:", res.headers.get("content-type"));
+  console.log("API RAW:", JSON.stringify(raw));
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${raw}`);
+  }
+
+  const data = parseApiResponse(raw);
+
+  if (!data || typeof data !== "object") {
+    throw new Error(`Resposta inválida do servidor em ${url}`);
+  }
+
+  return data as any;
+}
+
+
+
 type Pessoa = {
   nome: string;
   email: string;
 };
-
 
 //const API_BASE = "http://localhost/SICAD_Oficial/controller";
 const API_BASE = "https://sicad.linceonline.com.br/controller";
@@ -99,26 +150,25 @@ export default function HomePage() {
     const controller = new AbortController();
 
     (async () => {
-      fetch(`${API_BASE}/page-org.php`, {
-        method: "POST",
-        body: JSON.stringify({ evento_id: eventoId }),
-        signal: controller.signal,
-      })
-        .then((res) => res.json())
-        .then(async (json) => {
-          const nome = json.evento_nome ?? "Evento";
+      try {
+        const json = await postJsonSafe(
+          `${API_BASE}/page-org.php`,
+          { evento_id: eventoId },
+          controller.signal
+        );
 
-          setEventoNome(nome);
+        const nome = json.evento_nome ?? "Evento";
 
-          const userId = await AsyncStorage.getItem("userId");
-          await setLastEventoId(eventoId, userId);
-          await setLastEventoNome(nome, userId);
-        })
-        .catch((err) => {
-          if (err?.name !== "AbortError") {
-            console.error("Erro ao buscar dados:", err);
-          }
-        });
+        setEventoNome(nome);
+
+        const userId = await AsyncStorage.getItem("userId");
+        await setLastEventoId(eventoId, userId);
+        await setLastEventoNome(nome, userId);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          console.error("Erro ao buscar dados do evento:", err);
+        }
+      }
     })();
 
     return () => controller.abort();
@@ -137,21 +187,28 @@ export default function HomePage() {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE}/people.php`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ evento_id: eventoId }),
+      const data = await postJsonSafe(`${API_BASE}/people.php`, {
+        evento_id: eventoId,
       });
 
-      const data = await response.json();
+      const listaBruta = Array.isArray(data?.pessoas)
+        ? data.pessoas
+        : Array.isArray(data)
+          ? data
+          : [];
 
-      if (Array.isArray(data?.pessoas)) {
-        setPessoas(data.pessoas);
-      } else {
-        setPessoas(Array.isArray(data) ? data : []);
-      }
+      const listaNormalizada = listaBruta.map((p: any) => ({
+        nome: String(p.nome ?? ""),
+        email: String(p.email ?? ""),
+      }));
+
+      console.log("PESSOAS API:", data);
+      console.log("PESSOAS NORMALIZADAS:", listaNormalizada);
+
+      setPessoas(listaNormalizada);
     } catch (err) {
       console.error("Erro ao carregar pessoas:", err);
+      setPessoas([]);
     } finally {
       setLoading(false);
     }
