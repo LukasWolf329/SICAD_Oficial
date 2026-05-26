@@ -141,7 +141,7 @@ export default function SendCerticate() {
 
     //fetch(`http://localhost/SICAD_Oficial/controller/get_certificado.php?t=${Date.now()}`, {
     postJsonSafe(
-      `https://sicad.linceonline.com.br/controller/get_certificado.php?t=${Date.now()}`,
+      `https://sicad.linceonline.com.br/controller/get_certificado.php?debug=1&t=${Date.now()}`,
       { evento_id: eventoId },
       controller.signal
     )

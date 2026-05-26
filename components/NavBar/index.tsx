@@ -1,7 +1,7 @@
+import { logout } from '@/app/utils/logout';
 import Ionicons from '@expo/vector-icons/build/Ionicons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useNavigation } from 'expo-router';
-import { logout } from '@/app/utils/logout';
 import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
@@ -14,7 +14,9 @@ import {
   TextInput,
   View
 } from 'react-native';
+import * as DocumentPicker from "expo-document-picker";
 import { useEventosModal } from './EventosModalContext';
+import NiceAlert from '../NiceAlert/NiceAlert';
 
 /* ------------------------------------------------------
    TIPAGENS
@@ -27,6 +29,22 @@ interface Evento {
   status_usuario: string;
   total_participantes: number | null;
 }
+
+type NiceAlertVariant = "error" | "info" | "success";
+
+type NiceAlertState = {
+  visible: boolean;
+  title: string;
+  message: string;
+  variant: NiceAlertVariant;
+};
+
+
+const API_GET_EVENTOS =
+  "https://sicad.linceonline.com.br/controller/get_dropdown_eventos.php";
+
+const API_IMPORTAR_JSON =
+  "https://sicad.linceonline.com.br/controller/importar_eventos_json_arquivo.php";
 
 function parseApiResponse(raw: unknown) {
   if (typeof raw !== "string") return raw;
@@ -60,6 +78,34 @@ export function NavBar() {
   const { showEventos, openEventos, closeEventos } = useEventosModal();
   const [showPerfil, setShowPerfil] = useState(false);
 
+  const [importandoJson, setImportandoJson] = useState(false);
+
+  const [niceAlert, setNiceAlert] = useState<NiceAlertState>({
+    visible: false,
+    title: "",
+    message: "",
+    variant: "info",
+  });
+
+  function mostrarNiceAlert(
+    title: string,
+    message: string,
+    variant: NiceAlertVariant = "info"
+  ) {
+    setNiceAlert({
+      visible: true,
+      title,
+      message,
+      variant,
+    });
+  }
+
+  function fecharNiceAlert() {
+    setNiceAlert((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+  }
   /* ---------------- Carregar nome do usuário ---------------- */
   async function carregarUsuario() {
     const nomeSalvo = await AsyncStorage.getItem("userName");
@@ -73,74 +119,170 @@ export function NavBar() {
   }, [navigation]);
 
   /* ---------------- Carregar eventos do backend ---------------- */
-  useEffect(() => {
-    async function carregarEvento() {
-      try {
-        const userId = await AsyncStorage.getItem("userId");
-        console.log("userId:", userId);
+  /* ---------------- Carregar eventos do backend ---------------- */
+  async function carregarEvento() {
+    try {
+      const userId = await AsyncStorage.getItem("userId");
+      console.log("userId:", userId);
 
-        if (!userId) {
-          setEvento([]);
-          return;
-        }
-
-        const response = await fetch(
-          //"http://localhost/SICAD_Oficial/controller/get_dropdown_eventos.php",
-          "https://sicad.linceonline.com.br/controller/get_dropdown_eventos.php",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: Number(userId) }),
-          }
-        );
-
-        const raw = await response.text();
-        console.log("dropdown status:", response.status);
-        console.log("dropdown content-type:", response.headers.get("content-type"));
-        console.log("RAW dropdown:", JSON.stringify(raw));
-
-
-        if (!response.ok) {
-          console.error("HTTP ERROR dropdown:", response.status, raw);
-          setEvento([]);
-          return;
-        }
-
-        const data = parseApiResponse(raw);
-
-        if (!data || typeof data !== "object") {
-          console.error("get_dropdown_eventos.php não retornou JSON válido");
-          setEvento([]);
-          return;
-        }
-
-        // aceita tanto {eventos:[...]} quanto [...]
-        const lista = Array.isArray(data) ? data : (data.eventos ?? []);
-
-        // normaliza nomes possíveis vindos do PHP/SQL
-        const normalizada = lista.map((ev: any) => ({
-          evento_id: Number(ev.evento_id ?? ev.codigo ?? 0),
-          evento_nome: String(ev.evento_nome ?? ev.nome ?? "Evento"),
-          data_inicio: String(ev.data_inicio ?? ""),
-          data_fim: String(ev.data_fim ?? ""),
-          status_usuario: String(ev.status_usuario ?? ev.tipo_vinculo ?? ""),
-          total_participantes:
-            ev.total_participantes === null || ev.total_participantes === undefined
-              ? null
-              : Number(ev.total_participantes),
-        }));
-
-        setEvento(normalizada);
-      } catch (error) {
-        console.error("Erro ao carregar eventos:", error);
+      if (!userId) {
         setEvento([]);
+        return;
       }
-    }
 
+      const response = await fetch(API_GET_EVENTOS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: Number(userId) }),
+      });
+
+      const raw = await response.text();
+      console.log("dropdown status:", response.status);
+      console.log("dropdown content-type:", response.headers.get("content-type"));
+      console.log("RAW dropdown:", JSON.stringify(raw));
+
+      if (!response.ok) {
+        console.error("HTTP ERROR dropdown:", response.status, raw);
+        setEvento([]);
+        return;
+      }
+
+      const data: any = parseApiResponse(raw);
+
+      if (!data || typeof data !== "object") {
+        console.error("get_dropdown_eventos.php não retornou JSON válido");
+        setEvento([]);
+        return;
+      }
+
+      const lista = Array.isArray(data) ? data : data.eventos ?? [];
+
+      const normalizada = lista.map((ev: any) => ({
+        evento_id: Number(ev.evento_id ?? ev.codigo ?? 0),
+        evento_nome: String(ev.evento_nome ?? ev.nome ?? "Evento"),
+        data_inicio: String(ev.data_inicio ?? ""),
+        data_fim: String(ev.data_fim ?? ""),
+        status_usuario: String(ev.status_usuario ?? ev.tipo_vinculo ?? ""),
+        total_participantes:
+          ev.total_participantes === null || ev.total_participantes === undefined
+            ? null
+            : Number(ev.total_participantes),
+      }));
+
+      setEvento(normalizada);
+    } catch (error) {
+      console.error("Erro ao carregar eventos:", error);
+      setEvento([]);
+    }
+  }
+
+  useEffect(() => {
     carregarEvento();
   }, []);
 
+  async function importarJsonPeloBotaoAdicionar() {
+    if (importandoJson) return;
 
+    try {
+      setImportandoJson(true);
+
+      const resultado = await DocumentPicker.getDocumentAsync({
+        type: ["application/json", "text/json", "text/plain"],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (resultado.canceled) {
+        return;
+      }
+
+      const arquivo = resultado.assets?.[0];
+
+      if (!arquivo) {
+        throw new Error("Nenhum arquivo foi selecionado.");
+      }
+
+      const nomeArquivo = arquivo.name || "eventos.json";
+
+      if (!nomeArquivo.toLowerCase().endsWith(".json")) {
+        throw new Error("Selecione um arquivo com extensão .json.");
+      }
+
+      const userId = await AsyncStorage.getItem("userId");
+
+      if (!userId) {
+        throw new Error("Usuário não identificado. Faça login novamente.");
+      }
+
+      const formData = new FormData();
+
+      /*
+        No Web, o DocumentPicker pode retornar um File em arquivo.file.
+        No Android/iOS, normalmente usamos uri/name/type.
+      */
+      const arquivoWeb = (arquivo as any).file;
+
+      if (arquivoWeb) {
+        formData.append("arquivo_json", arquivoWeb, nomeArquivo);
+      } else {
+        formData.append("arquivo_json", {
+          uri: arquivo.uri,
+          name: nomeArquivo,
+          type: arquivo.mimeType || "application/json",
+        } as any);
+      }
+
+      formData.append("userId", String(userId));
+
+      const response = await fetch(API_IMPORTAR_JSON, {
+        method: "POST",
+        body: formData,
+      });
+
+      const raw = await response.text();
+
+      console.log("importar JSON status:", response.status);
+      console.log("RAW importar JSON:", raw);
+
+      const data: any = parseApiResponse(raw);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.erro ||
+          data?.message ||
+          raw ||
+          `Erro HTTP ${response.status}`
+        );
+      }
+
+      if (!data || data.ok !== true) {
+        throw new Error(data?.erro || "O backend não retornou sucesso.");
+      }
+
+      await carregarEvento();
+
+      const resultadoImportacao = data.resultado ?? {};
+
+      mostrarNiceAlert(
+        "Importação concluída",
+        `Eventos: ${resultadoImportacao.total_eventos ?? 0}\n` +
+        `Atividades: ${resultadoImportacao.total_atividades ?? 0}\n` +
+        `Participantes vinculados: ${resultadoImportacao.total_participantes_vinculados ?? 0
+        }`,
+        "success"
+      );
+    } catch (error: any) {
+      console.error("Erro ao importar JSON:", error);
+
+      mostrarNiceAlert(
+        "Erro ao importar JSON",
+        error?.message || "Não foi possível importar o arquivo JSON.",
+        "error"
+      );
+    } finally {
+      setImportandoJson(false);
+    }
+  }
 
   /* ---------------- Abrir evento com params ---------------- */
   async function abrirEvento(eventoId: number) {
@@ -249,9 +391,21 @@ export function NavBar() {
               ))}
 
               {/* Botão adicionar */}
-              <Pressable className="border-t py-3 mt-2 flex-row justify-center items-center">
-                <Ionicons name="add-outline" size={20} color="#2192FF" />
-                <Text className="text-[#2192FF] font-semibold"> Adicionar</Text>
+              <Pressable
+                onPress={importarJsonPeloBotaoAdicionar}
+                disabled={importandoJson}
+                className="border-t py-3 mt-2 flex-row justify-center items-center"
+                style={{ opacity: importandoJson ? 0.6 : 1 }}
+              >
+                <Ionicons
+                  name={importandoJson ? "cloud-upload-outline" : "add-outline"}
+                  size={20}
+                  color="#2192FF"
+                />
+
+                <Text className="text-[#2192FF] font-semibold">
+                  {importandoJson ? " Importando JSON..." : " Adicionar"}
+                </Text>
               </Pressable>
             </ScrollView>
 
@@ -292,6 +446,13 @@ export function NavBar() {
           </View>
         </View>
       </Modal>
+      <NiceAlert
+        visible={niceAlert.visible}
+        title={niceAlert.title}
+        message={niceAlert.message}
+        variant={niceAlert.variant}
+        onClose={fecharNiceAlert}
+      />
     </View>
   );
 }

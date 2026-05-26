@@ -1,7 +1,24 @@
 <?php
+$bufferLevel = ob_get_level();
+ob_start();
+
+ini_set("display_errors", "0");
+ini_set("html_errors", "0");
+ini_set("log_errors", "1");
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/db.php';
 
+/*
+  Remove qualquer saída acidental do db.php,
+  por exemplo: conectou
+*/
+while (ob_get_level() > $bufferLevel) {
+    ob_end_clean();
+}
+
 if (!isset($_GET['evento_id'])) {
+    http_response_code(400);
     die("evento_id não enviado");
 }
 
@@ -19,6 +36,7 @@ $stmt_evento->execute();
 $result_evento = $stmt_evento->get_result();
 
 if ($result_evento->num_rows === 0) {
+    http_response_code(404);
     die("Evento não encontrado");
 }
 
@@ -105,4 +123,3 @@ while ($row = $result->fetch_assoc()) {
 
 fclose($output);
 exit;
-?>
