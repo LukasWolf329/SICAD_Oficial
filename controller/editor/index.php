@@ -195,6 +195,14 @@
   <script>
     const canvas = new fabric.Canvas('c');
 
+    canvas.on('mouse:dblclick', function (e) {
+      const obj = e.target;
+      if (isTextObject(obj)) {
+        obj.enterEditing();
+        obj.selectAll();
+      }
+    });
+
     // ===== Controle anti-sobreposição =====
     function isTextObject(obj) {
       return obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text');
@@ -211,14 +219,27 @@
       const text = new fabric.Textbox('Digite aqui', {
         left: 100,
         top: 100,
-        width: 260,
+        width: 300,
         fontSize: 24,
         fontFamily: 'Arial',
-        fill: '#000'
+        fill: '#000',
+        textAlign: 'left',
+        editable: true,
+        editingBorderColor: '#1d4ed8',
+        cursorColor: '#1d4ed8',
+        enterEditingOnFocus: true,
+        lockScalingFlip: true
       });
 
-      addObject(text);
+      canvas.add(text);
+      canvas.setActiveObject(text);
+      canvas.requestRenderAll();
+
+      // Ativar edição imediatamente
+      text.enterEditing();
+      text.selectAll();
     }
+
 
     function updateText(property, value) {
       const active = canvas.getActiveObject();
