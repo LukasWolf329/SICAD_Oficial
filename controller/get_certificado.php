@@ -5,7 +5,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json; charset=UTF-8');
-header('X-Get-Certificado-Version: sicad-2026-05-19-sync-importados');
+header('X-Get-Certificado-Version: sicad-2026-05-28-email-download-pdf');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     if (ob_get_length()) {
@@ -31,7 +31,7 @@ function respond(int $status, array $payload): void
         ob_clean();
     }
 
-    $payload['versao_get_certificado'] = 'sicad-2026-05-19-sync-importados';
+    $payload['versao_get_certificado'] = 'sicad-2026-05-28-email-download-pdf';
 
     http_response_code($status);
 
@@ -45,6 +45,85 @@ function respond(int $status, array $payload): void
 
     echo $json;
     exit;
+}
+
+function input_json(): array
+{
+    static $cache = null;
+
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $raw = file_get_contents('php://input');
+    $cache = [];
+
+    if (is_string($raw) && trim($raw) !== '') {
+        $json = json_decode($raw, true);
+        if (is_array($json)) {
+            $cache = $json;
+        }
+    }
+
+    return $cache;
+}
+
+function bool_request_value($valor): bool
+{
+    if (is_bool($valor)) {
+        return $valor;
+    }
+
+    if (is_int($valor) || is_float($valor)) {
+        return (int) $valor === 1;
+    }
+
+    $normalizado = strtolower(trim((string) $valor));
+    return in_array($normalizado, ['1', 'true', 'sim', 'yes', 's', 'y'], true);
+}
+
+function obter_evento_id(): int
+{
+    $json = input_json();
+    $valor = null;
+
+    if (isset($json['evento_id'])) {
+        $valor = $json['evento_id'];
+    } elseif (isset($_POST['evento_id'])) {
+        $valor = $_POST['evento_id'];
+    } elseif (isset($_GET['evento_id'])) {
+        $valor = $_GET['evento_id'];
+    }
+
+    if ($valor === null || !ctype_digit((string) $valor)) {
+        respond(400, [
+            'success' => false,
+            'message' => 'evento_id não enviado ou inválido'
+        ]);
+    }
+
+    return (int) $valor;
+}
+
+function deve_sincronizar_certificados(): bool
+{
+    $json = input_json();
+
+    if (array_key_exists('sincronizar', $json)) {
+        return bool_request_value($json['sincronizar']);
+    }
+
+    if (array_key_exists('sincronizar', $_POST)) {
+        return bool_request_value($_POST['sincronizar']);
+    }
+
+    if (array_key_exists('sincronizar', $_GET)) {
+        return bool_request_value($_GET['sincronizar']);
+    }
+
+    // Importante: por padrão NÃO cria certificados automaticamente.
+    // Assim, quem foi cadastrado em participa mas não tem presença confirmada não ganha certificado.
+    return false;
 }
 
 function qi(string $identifier): string
@@ -179,35 +258,6 @@ function gerar_codigo_validacao_unico(mysqli $conn, string $tCertificado): strin
     throw new RuntimeException('Não foi possível gerar código de validação único.');
 }
 
-function obter_evento_id(): int
-{
-    $raw = file_get_contents('php://input');
-    $json = null;
-
-    if (is_string($raw) && trim($raw) !== '') {
-        $json = json_decode($raw, true);
-    }
-
-    $valor = null;
-
-    if (is_array($json) && isset($json['evento_id'])) {
-        $valor = $json['evento_id'];
-    } elseif (isset($_POST['evento_id'])) {
-        $valor = $_POST['evento_id'];
-    } elseif (isset($_GET['evento_id'])) {
-        $valor = $_GET['evento_id'];
-    }
-
-    if ($valor === null || !ctype_digit((string) $valor)) {
-        respond(400, [
-            'success' => false,
-            'message' => 'evento_id não enviado ou inválido'
-        ]);
-    }
-
-    return (int) $valor;
-}
-
 function sincronizar_certificados_do_evento(
     mysqli $conn,
     int $eventoId,
@@ -330,6 +380,7 @@ try {
     $conn->set_charset('utf8mb4');
 
     $eventoId = obter_evento_id();
+    $sincronizar = deve_sincronizar_certificados();
 
     $tEvento = resolver_tabela($conn, ['evento', 'Evento']);
     $tUsuario = resolver_tabela($conn, ['usuario', 'Usuario']);
@@ -354,23 +405,39 @@ try {
         ]);
     }
 
-    $conn->begin_transaction();
-    $certificadosCriadosAutomaticamente = sincronizar_certificados_do_evento(
-        $conn,
-        $eventoId,
-        $tUsuario,
-        $tAtividade,
-        $tParticipa,
-        $tCertificado
-    );
-    $conn->commit();
+    $certificadosCriadosAutomaticamente = 0;
 
-    $temStatusEnvio = coluna_existe($conn, $tAtividade, 'status_envio');
-    $statusExpr = $temStatusEnvio ? 'COALESCE(a.`status_envio`, 0)' : '0';
+    if ($sincronizar) {
+        $conn->begin_transaction();
+        $certificadosCriadosAutomaticamente = sincronizar_certificados_do_evento(
+            $conn,
+            $eventoId,
+            $tUsuario,
+            $tAtividade,
+            $tParticipa,
+            $tCertificado
+        );
+        $conn->commit();
+    }
+
+    $temStatusCertificado = coluna_existe($conn, $tCertificado, 'status_envio');
+    $temStatusAtividade = coluna_existe($conn, $tAtividade, 'status_envio');
+    $temCodigoValidacao = coluna_existe($conn, $tCertificado, 'codigo_validacao');
+
+    $statusExpr = '0';
+
+    if ($temStatusCertificado) {
+        $statusExpr = 'COALESCE(c.`status_envio`, 0)';
+    } elseif ($temStatusAtividade) {
+        $statusExpr = 'COALESCE(a.`status_envio`, 0)';
+    }
+
+    $codigoValidacaoExpr = $temCodigoValidacao ? 'c.`codigo_validacao`' : 'NULL';
 
     $sqlLista = '
         SELECT
             c.`codigo`,
+            ' . $codigoValidacaoExpr . ',
             u.`nome`,
             u.`email`,
             ' . $statusExpr . ',
@@ -390,19 +457,21 @@ try {
     executar($stmtLista, 'listagem de certificados');
 
     $codigo = null;
+    $codigoValidacao = null;
     $participante = null;
     $email = null;
     $status = null;
     $atividadeId = null;
     $atividadeNome = null;
 
-    $stmtLista->bind_result($codigo, $participante, $email, $status, $atividadeId, $atividadeNome);
+    $stmtLista->bind_result($codigo, $codigoValidacao, $participante, $email, $status, $atividadeId, $atividadeNome);
 
     $certificados = [];
 
     while ($stmtLista->fetch()) {
         $certificados[] = [
             'cod_certificado' => (int) $codigo,
+            'codigo_validacao' => $codigoValidacao !== null ? (string) $codigoValidacao : null,
             'participante' => (string) $participante,
             'email' => (string) $email,
             'status' => (int) $status,
@@ -417,6 +486,7 @@ try {
     respond(200, [
         'success' => true,
         'certificados' => $certificados,
+        'sincronizacao_automatica' => $sincronizar,
         'criados_automaticamente' => $certificadosCriadosAutomaticamente,
     ]);
 } catch (Throwable $e) {

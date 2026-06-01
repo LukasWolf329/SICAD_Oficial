@@ -195,32 +195,66 @@
   <script>
     const canvas = new fabric.Canvas('c');
 
+    // ===== Controle anti-sobreposição =====
+    function isTextObject(obj) {
+      return obj && (obj.type === 'i-text' || obj.type === 'textbox' || obj.type === 'text');
+    }
+
+    function addObject(obj) {
+      canvas.add(obj);
+      canvas.setActiveObject(obj);
+      canvas.requestRenderAll();
+    }
+
     // ===== Texto =====
     function addText() {
-      const text = new fabric.IText('Digite aqui', { left: 100, top: 100, fontSize: 24, fontFamily: 'Arial', fill: '#000' });
-      canvas.add(text);
-      canvas.setActiveObject(text);
+      const text = new fabric.Textbox('Digite aqui', {
+        left: 100,
+        top: 100,
+        width: 260,
+        fontSize: 24,
+        fontFamily: 'Arial',
+        fill: '#000'
+      });
+
+      addObject(text);
     }
 
     function updateText(property, value) {
       const active = canvas.getActiveObject();
-      if (!active || active.type !== 'i-text') return;
+
+      if (!isTextObject(active)) return;
+
       const val = property === 'fontSize' ? parseInt(value, 10) : value;
+
       if (property === 'fill') {
-        if (active.selectionStart !== active.selectionEnd) active.setSelectionStyles({ fill: val });
-        else active.set('fill', val);
-      } else active.set(property, val);
+        if (active.selectionStart !== active.selectionEnd && active.setSelectionStyles) {
+          active.setSelectionStyles({ fill: val });
+        } else {
+          active.set('fill', val);
+        }
+      } else {
+        active.set(property, val);
+      }
+
+      active.setCoords();
       canvas.requestRenderAll();
     }
 
     function toggleStyle(style) {
       const active = canvas.getActiveObject();
-      if (active && active.type === 'i-text') {
-        if (style === 'bold') active.set("fontWeight", active.fontWeight === 'bold' ? 'normal' : 'bold');
-        else if (style === 'italic') active.set("fontStyle", active.fontStyle === 'italic' ? 'normal' : 'italic');
-        else if (style === 'underline') active.set("underline", !active.underline);
-        canvas.requestRenderAll();
+
+      if (!isTextObject(active)) return;
+
+      if (style === 'bold') {
+        active.set('fontWeight', active.fontWeight === 'bold' ? 'normal' : 'bold');
+      } else if (style === 'italic') {
+        active.set('fontStyle', active.fontStyle === 'italic' ? 'normal' : 'italic');
+      } else if (style === 'underline') {
+        active.set('underline', !active.underline);
       }
+
+      canvas.requestRenderAll();
     }
 
     // ===== Upload de Imagem =====
@@ -322,20 +356,52 @@
     // ===== Tags =====
     function insertTag(tag) {
       if (!tag) return;
+
       const active = canvas.getActiveObject();
-      if (active && active.type === 'i-text') {
+
+      // Só mistura a tag dentro do texto se o usuário estiver editando o texto.
+      // Se o texto estiver apenas selecionado, cria uma tag separada.
+      if (isTextObject(active) && active.isEditing) {
         const start = active.selectionStart || 0;
         const end = active.selectionEnd || 0;
-        const text = active.text;
-        active.text = text.slice(0, start) + tag + text.slice(end);
+        const currentText = active.text || '';
+
+        active.set('text', currentText.slice(0, start) + tag + currentText.slice(end));
+        active.selectionStart = start + tag.length;
+        active.selectionEnd = start + tag.length;
+        active.setCoords();
         canvas.requestRenderAll();
       } else {
-        const text = new fabric.IText(tag, { left: 100, top: 100, fontSize: 24, fill: '#000' });
-        canvas.add(text);
+        const tagWidthMap = {
+          '{{NOME}}': 360,
+          '{{ATIVIDADE}}': 420,
+          '{{ASSINATURA}}': 300,
+          '{{CODIGO}}': 300
+        };
+
+        const text = new fabric.Textbox(tag, {
+          left: 100,
+          top: 100,
+          width: tagWidthMap[tag] || 340,
+          fontSize: 24,
+          fontFamily: 'Arial',
+          fill: '#000',
+          name: 'tag',
+          dataTipo: 'tag',
+          sicadTag: tag,
+          sicadAutoFit: true,
+          autoFit: true,
+          autoFitMode: 'shrink',
+          sicadNoWrap: true,
+          minFontSize: 8,
+          textAlign: 'center'
+        });
+
+        addObject(text);
       }
+
       document.getElementById('tagSelector').value = '';
     }
-
 
     let selectedTemplateSrc = null;
 
@@ -357,7 +423,16 @@
     const atividade_id = params.get('atividade_id');
 
     function saveCanvas() {
-      const canvasState = canvas.toJSON();
+      const canvasState = canvas.toJSON([
+        'name',
+        'dataTipo',
+        'sicadTag',
+        'sicadAutoFit',
+        'autoFit',
+        'autoFitMode',
+        'sicadNoWrap',
+        'minFontSize'
+      ]);
       const jsonString = JSON.stringify(canvasState);
       localStorage.setItem('savedCanvas', jsonString);
 
