@@ -1,13 +1,14 @@
 <?php
+
 declare(strict_types=1);
 
 ob_start();
-
+header('X-SICAD-PDF-VERSION: 2026-09-12-wrap-fixed-font');
+header('X-Enviar-Certificado-Version: sicad-2026-09-12-wrap-fixed-font');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Access-Control-Expose-Headers: Content-Disposition, X-Certificado-Filename, X-Certificado-Status');
-header('X-Enviar-Certificado-Version: sicad-2026-05-28-email-download-pdf');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     if (ob_get_length()) {
@@ -33,7 +34,7 @@ function respond(int $status, array $payload): void
         ob_clean();
     }
 
-    $payload['versao_enviar_certificado'] = 'sicad-2026-05-28-email-download-pdf';
+    $payload['versao_enviar_certificado'] = 'X-SICAD-PDF-VERSION: 2026-09-12-wrap-fixed-font';
 
     http_response_code($status);
     header('Content-Type: application/json; charset=UTF-8');
@@ -728,81 +729,177 @@ function fonte_tcpdf(array $obj): string
     return 'dejavusans';
 }
 
-function largura_max_linhas(TCPDF $pdf, string $text): float
+/**
+ * Área útil em coordenadas do canvas, NÃO em pixels da imagem original.
+ * right/bottom são coordenadas absolutas, não espessuras de margem.
+ * A imagem sozinha não informa onde ficam selos, assinaturas ou adornos.
+ */
+function sicad_area_util(array $template, float $canvasW, float $canvasH): array
 {
-    $linhas = preg_split("/\r\n|\r|\n/", $text) ?: [''];
-    $max = 0.0;
-
-    foreach ($linhas as $linha) {
-        $max = max($max, $pdf->GetStringWidth($linha));
+    $area = $template['sicadSafeArea'] ?? [
+        'left' => $canvasW * 0.10,
+        'top' => $canvasH * 0.10,
+        'right' => $canvasW * 0.90,
+        'bottom' => $canvasH * 0.90,
+    ];
+    if (!is_array($area)) {
+        throw new DomainException('Área útil do template inválida. Abra o editor e salve novamente.');
     }
-
-    return $max;
+    foreach (['left', 'top', 'right', 'bottom'] as $key) {
+        if (!isset($area[$key]) || !is_numeric($area[$key]) || !is_finite((float) $area[$key])) {
+            throw new DomainException('Coordenadas da área útil inválidas. Corrija as margens no editor.');
+        }
+        $area[$key] = (float) $area[$key];
+    }
+    if ($canvasW <= 0 || $canvasH <= 0 || $area['left'] < 0 || $area['top'] < 0
+        || $area['right'] > $canvasW || $area['bottom'] > $canvasH
+        || $area['right'] <= $area['left'] || $area['bottom'] <= $area['top']) {
+        throw new DomainException('A área útil deve estar dentro do canvas e ter largura e altura positivas.');
+    }
+    return $area;
 }
 
-function linhas_quebradas_estimadas(TCPDF $pdf, string $text, float $maxWidth): int
+/** Mantém a origem Fabric do texto, inclusive quando ele está rotacionado. */
+function sicad_matriz_texto(array $obj): array
 {
-    $explicitLines = preg_split("/\r\n|\r|\n/", $text) ?: [''];
-    $count = 0;
-
-    foreach ($explicitLines as $line) {
-        $line = trim((string) $line);
-
-        if ($line === '') {
-            $count++;
-            continue;
-        }
-
-        $words = preg_split('/\s+/', $line) ?: [];
-        $current = '';
-
-        foreach ($words as $word) {
-            $candidate = $current === '' ? $word : $current . ' ' . $word;
-
-            if ($pdf->GetStringWidth($candidate) <= $maxWidth || $current === '') {
-                $current = $candidate;
-                continue;
-            }
-
-            $count++;
-            $current = $word;
-        }
-
-        $count++;
-    }
-
-    return max(1, $count);
+    [$w, $h] = get_obj_wh($obj);
+    $sx = abs((float) ($obj['scaleX'] ?? 1));
+    $sy = abs((float) ($obj['scaleY'] ?? 1));
+    $angle = deg2rad((float) ($obj['angle'] ?? 0));
+    $cos = cos($angle);
+    $sin = sin($angle);
+    $ox = ['left' => -0.5, 'center' => 0.0, 'right' => 0.5][strtolower((string) ($obj['originX'] ?? 'left'))] ?? -0.5;
+    $oy = ['top' => -0.5, 'center' => 0.0, 'bottom' => 0.5][strtolower((string) ($obj['originY'] ?? 'top'))] ?? -0.5;
+    $dx = -$ox * $w * $sx;
+    $dy = -$oy * $h * $sy;
+    return [
+        $cos * $sx, $sin * $sx, -$sin * $sy, $cos * $sy,
+        (float) ($obj['left'] ?? 0) + $cos * $dx - $sin * $dy,
+        (float) ($obj['top'] ?? 0) + $sin * $dx + $cos * $dy,
+    ];
 }
 
-function ajustar_fonte_textbox(TCPDF $pdf, string $text, float $fontPt, float $minPt, float $cellW, float $cellH, float $lineHeight, bool $semQuebra): float
+/** Falha explícita em vez de cortar, reduzir a fonte ou gerar segunda página. */
+function sicad_validar_limites_texto(array $box, array $areaMm): void
 {
-    $fontPt = max($minPt, $fontPt);
-
-    for ($pt = $fontPt; $pt >= $minPt; $pt -= 0.5) {
-        $pdf->SetFontSize($pt);
-
-        if ($semQuebra) {
-            $linhas = preg_split("/\r\n|\r|\n/", $text) ?: [''];
-            $altura = count($linhas) * $pt * 0.3527777778 * $lineHeight;
-            if (largura_max_linhas($pdf, $text) <= $cellW && $altura <= $cellH) {
-                return $pt;
-            }
-            continue;
-        }
-
-        $qtdLinhas = linhas_quebradas_estimadas($pdf, $text, $cellW);
-        $altura = $qtdLinhas * $pt * 0.3527777778 * $lineHeight;
-
-        if ($altura <= $cellH) {
-            return $pt;
-        }
+    $angle = deg2rad($box['angle']);
+    $cos = cos($angle);
+    $sin = sin($angle);
+    $xs = [];
+    $ys = [];
+    foreach ([[0, 0], [$box['w'], 0], [0, $box['h']], [$box['w'], $box['h']]] as $p) {
+        $xs[] = $box['x'] + $cos * $p[0] - $sin * $p[1];
+        $ys[] = $box['y'] + $sin * $p[0] + $cos * $p[1];
     }
-
-    return $minPt;
+    $tolerance = 0.05; // tolerância numérica em mm; não é margem adicional de layout
+    if (min($xs) < $areaMm['left'] - $tolerance || max($xs) > $areaMm['right'] + $tolerance
+        || min($ys) < $areaMm['top'] - $tolerance || max($ys) > $areaMm['bottom'] + $tolerance) {
+        throw new DomainException(
+            'O texto "' . $box['label'] . '" não cabe na área útil mantendo a fonte. '
+            . 'Amplie a largura da caixa, reposicione o bloco ou ajuste as margens no editor. '
+            . 'Nenhuma letra foi reduzida e nenhum PDF incompleto foi enviado.'
+        );
+    }
+    if ($box['maxHeight'] > 0 && $box['h'] > $box['maxHeight'] + $tolerance) {
+        throw new DomainException(
+            'O texto "' . $box['label'] . '" excede a altura máxima definida para a caixa. '
+            . 'Aumente o espaço reservado ou revise o conteúdo; a fonte foi mantida.'
+        );
+    }
 }
 
-function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale, float $offX, float $offY, array $map): void
+/**
+ * Substitui as tags ANTES de medir. O tamanho configurado é aplicado uma só vez.
+ * A largura controla a quebra; a altura é consequência do texto substituído.
+ * autoFit, sicadAutoFit, minFontSize e sicadNoWrap legados não reduzem a fonte.
+ */
+function sicad_preparar_texto(
+    TCPDF $pdf, array $obj, array $parentM, float $scale, float $offX, float $offY,
+    array $map, array $areaMm
+): array {
+    $raw = (string) ($obj['text'] ?? '');
+    $text = replace_placeholders($raw, $map);
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    if (preg_match('//u', $text) !== 1) {
+        throw new DomainException('O texto do certificado não está em UTF-8 válido.');
+    }
+    if (!empty($obj['flipX']) || !empty($obj['flipY'])
+        || abs((float) ($obj['skewX'] ?? 0)) > 0.001 || abs((float) ($obj['skewY'] ?? 0)) > 0.001) {
+        throw new DomainException('Remova espelhamento/inclinação do bloco de texto antes de emitir o certificado.');
+    }
+    [$w, $h] = get_obj_wh($obj);
+    $m = mat_mul($parentM, sicad_matriz_texto($obj));
+    $sx = hypot($m[0], $m[1]);
+    $sy = hypot($m[2], $m[3]);
+    $det = $m[0] * $m[3] - $m[1] * $m[2];
+    if ($w <= 0 || $sx <= 0 || $sy <= 0 || $scale <= 0 || $det <= 0
+        || abs($m[0] * $m[2] + $m[1] * $m[3]) > 0.001 * $sx * $sy) {
+        throw new DomainException('Dimensões/transformação do texto inválidas. Desagrupe o texto e ajuste sua caixa.');
+    }
+    [$xPx, $yPx] = mat_apply($m, -$w / 2, -$h / 2);
+    [$xMm, $yMm] = px_to_mm($xPx, $yPx, $scale, $offX, $offY);
+    $angle = rad2deg(atan2($m[1], $m[0]));
+    $cellW = $w * $sx * $scale;
+
+    // Caixas horizontais respeitam a borda direita da área útil, sem esticar a fonte.
+    // Caixas rotacionadas conservam a geometria e são validadas pelos quatro cantos.
+    if (abs($angle) < 0.001) {
+        $xMm = max($xMm, $areaMm['left']);
+        $available = $areaMm['right'] - $xMm;
+        $cellW = !empty($obj['sicadWrapToMargin']) ? $available : min($cellW, $available);
+    }
+    if ($cellW <= 0.1) {
+        throw new DomainException('Não há largura disponível para o texto. Mova a caixa para dentro das margens.');
+    }
+    $fontSizePx = (float) ($obj['fontSize'] ?? 16) * $sy;
+    if (!is_finite($fontSizePx) || $fontSizePx <= 0) {
+        throw new DomainException('O tamanho de fonte deve ser maior que zero.');
+    }
+    $fontPt = $fontSizePx * $scale * 72.0 / 25.4;
+    $pdf->SetFont(fonte_tcpdf($obj), estilo_fonte($obj), $fontPt);
+    [$r, $g, $b] = array_slice(parse_color($obj['fill'] ?? '#000'), 0, 3);
+    $pdf->SetTextColor($r, $g, $b);
+    // Preserva somente a escala horizontal que JÁ foi escolhida no editor.
+    // Não calcula uma escala nova para encaixar texto.
+    $pdf->SetFontStretching(100.0 * $sx / $sy);
+    $pdf->setFontSpacing(((float) ($obj['charSpacing'] ?? 0) / 1000.0) * $fontPt);
+    $lineHeight = (float) ($obj['lineHeight'] ?? 1.16);
+    $pdf->setCellHeightRatio(max(0.8, min(3.0, $lineHeight)));
+    $pdf->setCellPaddings(0, 0, 0, 0);
+    $pdf->setCellMargins(0, 0, 0, 0);
+
+    // Até um código sem espaços pode quebrar. Um único glifo maior que a caixa
+    // não tem solução com fonte fixa: rejeita em vez de cortar o caractere.
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    foreach (array_unique($chars) as $ch) {
+        if ($ch !== "\n" && $ch !== "\t" && $pdf->GetStringWidth($ch) > $cellW + 0.01) {
+            throw new DomainException('A caixa de texto é estreita demais para um caractere. Amplie sua largura.');
+        }
+    }
+    $height = (float) $pdf->getStringHeight(
+        $cellW, $text, true, false, ['L' => 0, 'T' => 0, 'R' => 0, 'B' => 0], 0
+    );
+    $label = preg_replace('/\s+/u', ' ', $raw) ?: 'bloco de texto';
+    preg_match('/^.{0,70}/us', $label, $labelMatch);
+    $box = [
+        'x' => $xMm, 'y' => $yMm, 'w' => $cellW, 'h' => $height,
+        'text' => $text, 'fontPt' => $fontPt, 'angle' => $angle,
+        'align' => align_fabric_to_tcpdf($obj['textAlign'] ?? 'left'),
+        'maxHeight' => max(0.0, (float) ($obj['sicadMaxHeight'] ?? 0)) * $sy * $scale,
+        'label' => $labelMatch[0] ?? 'bloco de texto',
+    ];
+    sicad_validar_limites_texto($box, $areaMm);
+    return $box;
+}
+
+function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale, float $offX, float $offY, array $map, array $areaMm = []): void
 {
+    if (!$areaMm) {
+        $areaMm = [
+            'left' => $pdf->getPageWidth() * 0.10, 'top' => $pdf->getPageHeight() * 0.10,
+            'right' => $pdf->getPageWidth() * 0.90, 'bottom' => $pdf->getPageHeight() * 0.90,
+        ];
+    }
     $type = $obj['type'] ?? '';
 
     if (objeto_e_modelo_fundo($obj)) {
@@ -819,7 +916,7 @@ function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale,
         if (is_array($children)) {
             foreach ($children as $child) {
                 if (is_array($child)) {
-                    render_fabric_obj($pdf, $child, $m, $scale, $offX, $offY, $map);
+                    render_fabric_obj($pdf, $child, $m, $scale, $offX, $offY, $map, $areaMm);
                 }
             }
         }
@@ -835,158 +932,46 @@ function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale,
     }
 
     if (in_array($type, ['i-text', 'text', 'textbox'], true)) {
-        $raw = (string) ($obj['text'] ?? '');
-        if ($raw === '') {
-            if ($setAlpha) {
-                $pdf->SetAlpha(1);
-            }
+        if ((string) ($obj['text'] ?? '') === '') {
+            if ($setAlpha) { $pdf->SetAlpha(1); }
             return;
         }
-
-        $temTagDinamica = texto_contem_tag_dinamica($raw);
-        $apenasTagDinamica = texto_e_apenas_tag_dinamica($raw);
-
-        $text = $temTagDinamica ? replace_placeholders($raw, $map) : $raw;
-
-        [$w, $h] = get_obj_wh($obj);
-        $sxAbs = abs((float) ($obj['scaleX'] ?? 1));
-        $syAbs = abs((float) ($obj['scaleY'] ?? 1));
-        $scaledW = max(1.0, $w * $sxAbs);
-        $scaledH = max(1.0, $h * $syAbs);
-
-        $originX = strtolower((string) ($obj['originX'] ?? 'left'));
-        $originY = strtolower((string) ($obj['originY'] ?? 'top'));
-        $left = (float) ($obj['left'] ?? 0);
-        $top = (float) ($obj['top'] ?? 0);
-
-        $xPx = $left;
-        if ($originX === 'center') {
-            $xPx = $left - $scaledW / 2;
-        } elseif ($originX === 'right') {
-            $xPx = $left - $scaledW;
-        }
-
-        $yPx = $top;
-        if ($originY === 'center') {
-            $yPx = $top - $scaledH / 2;
-        } elseif ($originY === 'bottom') {
-            $yPx = $top - $scaledH;
-        }
-
-        [$xMm, $yMm] = px_to_mm($xPx, $yPx, $scale, $offX, $offY);
-
-        $fontSizePx = (float) ($obj['fontSize'] ?? 16) * $syAbs;
-        $fontPt = max(4, ($fontSizePx * $scale) * 72.0 / 25.4);
-        $minFontPt = max(3, ((float) ($obj['minFontSize'] ?? 8) * $scale) * 72.0 / 25.4);
-
-        $style = estilo_fonte($obj);
-        $tcpdfFont = fonte_tcpdf($obj);
-
-        [$r, $g, $b] = array_slice(parse_color($obj['fill'] ?? '#000'), 0, 3);
-        $pdf->SetTextColor($r, $g, $b);
-        $pdf->SetFont($tcpdfFont, $style, $fontPt);
-
-        if (method_exists($pdf, 'SetFontStretching')) {
-            $stretch = ($syAbs > 0) ? (100.0 * ($sxAbs / $syAbs)) : 100.0;
-            $pdf->SetFontStretching(max(10, min(300, $stretch)));
-        }
-
-        $lineHeight = (float) ($obj['lineHeight'] ?? 1.16);
-        $align = align_fabric_to_tcpdf($obj['textAlign'] ?? 'left');
-
-        $wMmFabric = $scaledW * $scale;
-        $cellW = max(1.0, $wMmFabric);
-        $cellH = max(($scaledH * $scale), (($fontSizePx * $lineHeight) * $scale));
-
-        /*
-         * Se o texto contém tag dinâmica, como {{NOME}}, {{EMAIL}},
-         * {{ATIVIDADE}}, etc., ele NÃO pode expandir livremente a largura,
-         * porque isso faz o nome do usuário invadir outro texto no PDF.
-         *
-         * Então:
-         * - tag dinâmica usa autoFit obrigatório;
-         * - tag pura, como {{NOME}}, tenta ficar em uma linha e encolher se precisar;
-         * - texto comum continua com o comportamento antigo.
-         */
-        $autoFit = !empty($obj['autoFit']) || !empty($obj['sicadAutoFit']) || $temTagDinamica;
-        $semQuebra = ($obj['autoFitMode'] ?? '') === 'shrink' || !empty($obj['sicadNoWrap']) || $apenasTagDinamica;
-
-        if (!$temTagDinamica && $type !== 'textbox' && !$autoFit) {
-            $maxLineW = largura_max_linhas($pdf, $text);
-            $cellW = max($cellW, $maxLineW + 0.5);
-
-            $delta = $cellW - $wMmFabric;
-            if ($delta > 0.001) {
-                if ($align === 'C') {
-                    $xMm -= $delta / 2.0;
-                } elseif ($align === 'R') {
-                    $xMm -= $delta;
-                }
+        $transform = false;
+        try {
+            $box = sicad_preparar_texto($pdf, $obj, $parentM, $scale, $offX, $offY, $map, $areaMm);
+            $startPage = $pdf->getPage();
+            if (abs($box['angle']) > 0.001) {
+                $pdf->StartTransform();
+                $transform = true;
+                // Fabric usa y para baixo; o ângulo positivo do TCPDF é anti-horário.
+                $pdf->Rotate(-$box['angle'], $box['x'], $box['y']);
             }
-        }
-
-        if ($autoFit) {
-            if ($apenasTagDinamica) {
-                $cellW = max($cellW, 35.0);
-                $cellH = max($cellH, ($fontSizePx * $lineHeight) * $scale);
-            }
-
-            $fontPt = ajustar_fonte_textbox(
-                $pdf,
-                $text,
-                $fontPt,
-                $minFontPt,
-                $cellW,
-                $cellH,
-                $lineHeight,
-                $semQuebra
+            $pdf->MultiCell(
+                $box['w'],     // largura: ponto de quebra da linha
+                0,             // altura mínima: não prende o texto à altura da tag
+                $box['text'],  // conteúdo final, com todas as tags já substituídas
+                0, $box['align'], false, 1,
+                $box['x'], $box['y'],
+                true,
+                0,             // stretch=0: não comprime as letras
+                false,         // texto simples, não HTML
+                false,         // sem padding implícito
+                0,             // maxh=0: não trunca o texto
+                'T',
+                false          // fitcell=false: NUNCA reduz a fonte
             );
-
-            $pdf->SetFont($tcpdfFont, $style, $fontPt);
-        }
-
-        if (method_exists($pdf, 'setCellHeightRatio')) {
-            $pdf->setCellHeightRatio(max(0.8, min(3.0, $lineHeight)));
-        }
-
-        $angle = (float) ($obj['angle'] ?? 0);
-        $cxMm = $xMm + $cellW / 2;
-        $cyMm = $yMm + $cellH / 2;
-
-        if (abs($angle) > 0.001 && method_exists($pdf, 'StartTransform')) {
-            $pdf->StartTransform();
-            $pdf->Rotate($angle, $cxMm, $cyMm);
-        }
-
-        $pdf->SetXY($xMm, $yMm);
-        $pdf->MultiCell(
-            $cellW,
-            max(0.1, $cellH),
-            $text,
-            0,
-            $align,
-            false,
-            1,
-            '',
-            '',
-            true,
-            0,
-            false,
-            false
-        );
-
-        if (abs($angle) > 0.001 && method_exists($pdf, 'StopTransform')) {
-            $pdf->StopTransform();
-        }
-
-        if (method_exists($pdf, 'SetFontStretching')) {
+            // Confere também a altura realmente consumida pelo MultiCell.
+            $box['h'] = max($box['h'], (float) $pdf->GetY() - $box['y']);
+            if ($pdf->getPage() !== $startPage) {
+                throw new DomainException('O texto gerou uma segunda página. Revise o espaço disponível no template.');
+            }
+            sicad_validar_limites_texto($box, $areaMm);
+        } finally {
+            if ($transform) { $pdf->StopTransform(); }
             $pdf->SetFontStretching(100);
-        }
-        if (method_exists($pdf, 'setCellHeightRatio')) {
+            $pdf->setFontSpacing(0);
             $pdf->setCellHeightRatio(1.25);
-        }
-        if ($setAlpha) {
-            $pdf->SetAlpha(1);
+            if ($setAlpha) { $pdf->SetAlpha(1); }
         }
         return;
     }
@@ -1148,7 +1133,7 @@ function render_fabric_obj(TCPDF $pdf, array $obj, array $parentM, float $scale,
             $signX = ($x1 <= $x2) ? 1 : -1;
             $signY = ($y1 <= $y2) ? 1 : -1;
 
-            $p1 = mat_apply($m, -($w / 2) * $signX, -($h / 2) * $signY);
+            $p1 = mat_apply($m, - ($w / 2) * $signX, - ($h / 2) * $signY);
             $p2 = mat_apply($m, ($w / 2) * $signX, ($h / 2) * $signY);
 
             [$x1Mm, $y1Mm] = px_to_mm($p1[0], $p1[1], $scale, $offX, $offY);
@@ -1262,119 +1247,125 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
 
     [$imgPath, $fileType, $backgroundIsTmp] = imagem_source_para_arquivo($backgroundSrc);
 
-    if ($fileType === 'JPG') {
-        $fileType = 'JPEG';
-    }
-
-    if (strtoupper($fileType) === 'PNG' && pngHasTransparency($imgPath)) {
-        respond(500, [
-            'success' => false,
-            'message' => 'A imagem base do certificado está em PNG com transparência. Converta a imagem para JPG ou PNG sem transparência.'
-        ]);
-    }
-
-    $canvasW = 0.0;
-    $canvasH = 0.0;
-
-    if (isset($template['canvasWidth'], $template['canvasHeight'])) {
-        $canvasW = (float) $template['canvasWidth'];
-        $canvasH = (float) $template['canvasHeight'];
-    } elseif (is_array($bg) && !empty($bg['width']) && !empty($bg['height'])) {
-        $canvasW = (float) $bg['width'] * (float) ($bg['scaleX'] ?? 1);
-        $canvasH = (float) $bg['height'] * (float) ($bg['scaleY'] ?? 1);
-    } elseif (is_array($modeloFundo) && !empty($modeloFundo['width']) && !empty($modeloFundo['height'])) {
-        $canvasW = (float) ($modeloFundo['width'] ?? 0) * (float) ($modeloFundo['scaleX'] ?? 1);
-        $canvasH = (float) ($modeloFundo['height'] ?? 0) * (float) ($modeloFundo['scaleY'] ?? 1);
-    }
-
-    if ($canvasW <= 0 || $canvasH <= 0) {
-        $size = @getimagesize($imgPath);
-        if (!$size) {
-            throw new RuntimeException('Não foi possível identificar as dimensões do certificado.');
+    try {
+        if ($fileType === 'JPG') {
+            $fileType = 'JPEG';
         }
-        $canvasW = (float) $size[0];
-        $canvasH = (float) $size[1];
-    }
 
-    $codigoValidacao = (string) ($row['codigo_validacao'] ?: $row['certificado_codigo']);
-    $codigoFormatado = formatar_codigo_validacao($codigoValidacao);
-    $cargaHoraria = (int) ($row['certificado_carga_horaria'] ?? 0);
-    if ($cargaHoraria <= 0) {
-        $cargaHoraria = (int) ($row['atividade_carga_horaria'] ?? 0);
-    }
-
-    $dataEmissao = $row['data_emissao'] ?: date('Y-m-d');
-
-    $map = [
-        'NOME' => (string) ($row['nome_usuario'] ?? ''),
-        'NOME_USUARIO' => (string) ($row['nome_usuario'] ?? ''),
-        'NOME_PARTICIPANTE' => (string) ($row['nome_usuario'] ?? ''),
-        'PARTICIPANTE' => (string) ($row['nome_usuario'] ?? ''),
-        'ALUNO' => (string) ($row['nome_usuario'] ?? ''),
-        'EMAIL' => (string) ($row['email_usuario'] ?? ''),
-        'EMAIL_USUARIO' => (string) ($row['email_usuario'] ?? ''),
-        'ATIVIDADE' => (string) ($row['nome_atividade'] ?? ''),
-        'NOME_ATIVIDADE' => (string) ($row['nome_atividade'] ?? ''),
-        'EVENTO' => (string) ($row['nome_evento'] ?? ''),
-        'NOME_EVENTO' => (string) ($row['nome_evento'] ?? ''),
-        'ASSINATURA' => (string) ($row['nome_palestrante'] ?? ''),
-        'PALESTRANTE' => (string) ($row['nome_palestrante'] ?? ''),
-        'NOME_PALESTRANTE' => (string) ($row['nome_palestrante'] ?? ''),
-        'CODIGO' => $codigoFormatado,
-        'CODIGO_CERTIFICADO' => $codigoFormatado,
-        'CODIGO_VALIDACAO' => $codigoFormatado,
-        'DATA' => formatar_data_br($dataEmissao),
-        'DATA_EMISSAO' => formatar_data_br($dataEmissao),
-        'DATA_INICIO' => formatar_data_br($row['evento_data_inicio'] ?? ''),
-        'DATA_FIM' => formatar_data_br($row['evento_data_fim'] ?? ''),
-        'CARGA_HORARIA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
-        'CARGA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
-    ];
-
-    $pdfPath = sys_get_temp_dir() . '/certificado_' . preg_replace('/[^A-Za-z0-9]/', '', $codigoValidacao) . '_' . uniqid() . '.pdf';
-    $filename = nome_arquivo_seguro((string) $row['nome_usuario']) . '_' . nome_arquivo_seguro((string) $row['nome_atividade']) . '.pdf';
-
-    $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-    $pdf->setPrintHeader(false);
-    $pdf->setPrintFooter(false);
-    $pdf->SetMargins(0, 0, 0, true);
-    $pdf->SetAutoPageBreak(false, 0);
-    $pdf->AddPage();
-
-    if (method_exists($pdf, 'setCellPaddings')) {
-        $pdf->setCellPaddings(0, 0, 0, 0);
-    }
-    if (method_exists($pdf, 'setCellMargins')) {
-        $pdf->setCellMargins(0, 0, 0, 0);
-    }
-
-    $pdf->Image($imgPath, 0, 0, 297, 210, $fileType);
-
-    $pageW = 297.0;
-    $pageH = 210.0;
-    $scale = min($pageW / $canvasW, $pageH / $canvasH);
-    $offX = ($pageW - ($canvasW * $scale)) / 2.0;
-    $offY = ($pageH - ($canvasH * $scale)) / 2.0;
-
-    $identity = [1, 0, 0, 1, 0, 0];
-
-    /*
-     * Renderiza os objetos normais primeiro e as tags dinâmicas por último.
-     * Isso impede que um texto comum fique por cima do nome do usuário,
-     * e-mail, atividade, código, etc. depois da substituição.
-     */
-    $objectsOrdenados = ordenar_objetos_pdf_sem_sobrepor_tags($objects);
-
-    foreach ($objectsOrdenados as $obj) {
-        if (is_array($obj)) {
-            render_fabric_obj($pdf, $obj, $identity, $scale, $offX, $offY, $map);
+        if (strtoupper($fileType) === 'PNG' && pngHasTransparency($imgPath)) {
+            respond(500, [
+                'success' => false,
+                'message' => 'A imagem base do certificado está em PNG com transparência. Converta a imagem para JPG ou PNG sem transparência.'
+            ]);
         }
-    }
 
-    $pdf->Output($pdfPath, 'F');
+        $canvasW = 0.0;
+        $canvasH = 0.0;
 
-    if ($backgroundIsTmp && is_file($imgPath)) {
-        @unlink($imgPath);
+        if (isset($template['canvasWidth'], $template['canvasHeight'])) {
+            $canvasW = (float) $template['canvasWidth'];
+            $canvasH = (float) $template['canvasHeight'];
+        } elseif (is_array($bg) && !empty($bg['width']) && !empty($bg['height'])) {
+            $canvasW = (float) $bg['width'] * (float) ($bg['scaleX'] ?? 1);
+            $canvasH = (float) $bg['height'] * (float) ($bg['scaleY'] ?? 1);
+        } elseif (is_array($modeloFundo) && !empty($modeloFundo['width']) && !empty($modeloFundo['height'])) {
+            $canvasW = (float) ($modeloFundo['width'] ?? 0) * (float) ($modeloFundo['scaleX'] ?? 1);
+            $canvasH = (float) ($modeloFundo['height'] ?? 0) * (float) ($modeloFundo['scaleY'] ?? 1);
+        }
+
+        if ($canvasW <= 0 || $canvasH <= 0) {
+            $size = @getimagesize($imgPath);
+            if (!$size) {
+                throw new RuntimeException('Não foi possível identificar as dimensões do certificado.');
+            }
+            $canvasW = (float) $size[0];
+            $canvasH = (float) $size[1];
+        }
+
+        $codigoValidacao = (string) ($row['codigo_validacao'] ?: $row['certificado_codigo']);
+        $codigoFormatado = formatar_codigo_validacao($codigoValidacao);
+        $cargaHoraria = (int) ($row['certificado_carga_horaria'] ?? 0);
+        if ($cargaHoraria <= 0) {
+            $cargaHoraria = (int) ($row['atividade_carga_horaria'] ?? 0);
+        }
+
+        $dataEmissao = $row['data_emissao'] ?: date('Y-m-d');
+
+        $map = [
+            'NOME' => (string) ($row['nome_usuario'] ?? ''),
+            'NOME_USUARIO' => (string) ($row['nome_usuario'] ?? ''),
+            'NOME_PARTICIPANTE' => (string) ($row['nome_usuario'] ?? ''),
+            'PARTICIPANTE' => (string) ($row['nome_usuario'] ?? ''),
+            'ALUNO' => (string) ($row['nome_usuario'] ?? ''),
+            'EMAIL' => (string) ($row['email_usuario'] ?? ''),
+            'EMAIL_USUARIO' => (string) ($row['email_usuario'] ?? ''),
+            'ATIVIDADE' => (string) ($row['nome_atividade'] ?? ''),
+            'NOME_ATIVIDADE' => (string) ($row['nome_atividade'] ?? ''),
+            'EVENTO' => (string) ($row['nome_evento'] ?? ''),
+            'NOME_EVENTO' => (string) ($row['nome_evento'] ?? ''),
+            'ASSINATURA' => (string) ($row['nome_palestrante'] ?? ''),
+            'PALESTRANTE' => (string) ($row['nome_palestrante'] ?? ''),
+            'NOME_PALESTRANTE' => (string) ($row['nome_palestrante'] ?? ''),
+            'CODIGO' => $codigoFormatado,
+            'CODIGO_CERTIFICADO' => $codigoFormatado,
+            'CODIGO_VALIDACAO' => $codigoFormatado,
+            'DATA' => formatar_data_br($dataEmissao),
+            'DATA_EMISSAO' => formatar_data_br($dataEmissao),
+            'DATA_INICIO' => formatar_data_br($row['evento_data_inicio'] ?? ''),
+            'DATA_FIM' => formatar_data_br($row['evento_data_fim'] ?? ''),
+            'CARGA_HORARIA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
+            'CARGA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
+        ];
+
+        $pdfPath = sys_get_temp_dir() . '/certificado_' . preg_replace('/[^A-Za-z0-9]/', '', $codigoValidacao) . '_' . uniqid() . '.pdf';
+        $filename = nome_arquivo_seguro((string) $row['nome_usuario']) . '_' . nome_arquivo_seguro((string) $row['nome_atividade']) . '.pdf';
+
+        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(0, 0, 0, true);
+        $pdf->SetAutoPageBreak(false, 0);
+        $pdf->AddPage();
+
+        if (method_exists($pdf, 'setCellPaddings')) {
+            $pdf->setCellPaddings(0, 0, 0, 0);
+        }
+        if (method_exists($pdf, 'setCellMargins')) {
+            $pdf->setCellMargins(0, 0, 0, 0);
+        }
+
+        $pageW = 297.0;
+        $pageH = 210.0;
+        $scale = min($pageW / $canvasW, $pageH / $canvasH);
+        $offX = ($pageW - ($canvasW * $scale)) / 2.0;
+        $offY = ($pageH - ($canvasH * $scale)) / 2.0;
+
+        $pdf->Image($imgPath, $offX, $offY, $canvasW * $scale, $canvasH * $scale, $fileType);
+        $areaPx = sicad_area_util($template, $canvasW, $canvasH);
+        $areaMm = [
+            'left' => $offX + $areaPx['left'] * $scale,
+            'top' => $offY + $areaPx['top'] * $scale,
+            'right' => $offX + $areaPx['right'] * $scale,
+            'bottom' => $offY + $areaPx['bottom'] * $scale,
+        ];
+
+        $identity = [1, 0, 0, 1, 0, 0];
+
+        // Mantém a ordem das camadas do editor. Ordem de desenho não cria fluxo de texto.
+        $objectsOrdenados = $objects;
+
+        foreach ($objectsOrdenados as $obj) {
+            if (is_array($obj)) {
+                render_fabric_obj($pdf, $obj, $identity, $scale, $offX, $offY, $map, $areaMm);
+            }
+        }
+
+        $pdf->Output($pdfPath, 'F');
+
+    } finally {
+        if ($backgroundIsTmp && is_file($imgPath)) {
+            @unlink($imgPath);
+        }
     }
 
     return [$pdfPath, $filename, $row];
@@ -1434,10 +1425,9 @@ try {
         enviar_pdf_para_download($pdfPath, $filename, $statusAtual);
     }
 
-    // Mantém compatibilidade com o envio por e-mail já existente.
-    // Se houver variáveis de ambiente, elas têm prioridade.
-    $smtpUser = getenv('SICAD_SMTP_USER') ?: 'sicad.certificados@gmail.com';
-    $smtpPass = getenv('SICAD_SMTP_PASS') ?: 'dtrt frya etbb ohhy';
+    // Configure as credenciais no ambiente do processo PHP; nunca no código-fonte.
+    $smtpUser = getenv('SICAD_SMTP_USER') ?: '';
+    $smtpPass = getenv('SICAD_SMTP_PASS') ?: '';
 
     if ($smtpUser === '' || $smtpPass === '') {
         @unlink($pdfPath);
@@ -1460,8 +1450,158 @@ try {
     $mail->setFrom($smtpUser, 'SICAD - Certificados');
     $mail->addAddress((string) $row['email_usuario'], (string) $row['nome_usuario']);
     $mail->Subject = 'Seu certificado está disponível!';
-    $mail->Body = "Olá {$row['nome_usuario']},\n\nSegue em anexo seu certificado da atividade \"{$row['nome_atividade']}\".\n\nAtenciosamente,\nEquipe SICAD";
+
+    $mail->isHTML(true);
+
+    $nomeUsuario = htmlspecialchars(
+        (string) $row['nome_usuario'],
+        ENT_QUOTES,
+        'UTF-8'
+    );
+
+    $nomeAtividade = htmlspecialchars(
+        (string) $row['nome_atividade'],
+        ENT_QUOTES,
+        'UTF-8'
+    );
+
+    $mail->Body = "
+<!DOCTYPE html>
+<html lang='pt-BR'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+</head>
+
+<body style='
+    margin: 0;
+    padding: 0;
+    background-color: #f4f6f8;
+    font-family: Arial, Helvetica, sans-serif;
+'>
+
+    <div style='
+        max-width: 600px;
+        margin: 30px auto;
+        background-color: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    '>
+
+        <!-- CABEÇALHO -->
+        <div style='
+            background-color: #0a112d;
+            padding: 25px;
+            text-align: center;
+        '>
+            <h1 style='
+                margin: 0;
+                color: #ffffff;
+                font-size: 24px;
+            '>
+                SICAD
+            </h1>
+
+            <p style='
+                margin: 8px 0 0;
+                color: #d9deeb;
+                font-size: 14px;
+            '>
+                Sistema de Certificação Acadêmica Digital
+            </p>
+        </div>
+
+        <!-- CONTEÚDO -->
+        <div style='
+            padding: 35px;
+            color: #333333;
+        '>
+
+            <h2 style='
+                margin-top: 0;
+                color: #0a112d;
+                font-size: 22px;
+            '>
+                Olá, {$nomeUsuario}!
+            </h2>
+
+            <p style='
+                font-size: 16px;
+                line-height: 1.6;
+            '>
+                Seu certificado está disponível.
+            </p>
+
+            <p style='
+                font-size: 16px;
+                line-height: 1.6;
+            '>
+                Você participou da atividade:
+            </p>
+
+            <div style='
+                margin: 20px 0;
+                padding: 18px;
+                background-color: #f1f3f7;
+                border-left: 4px solid #0a112d;
+                border-radius: 5px;
+            '>
+                <strong style='
+                    font-size: 16px;
+                    color: #0a112d;
+                '>
+                    {$nomeAtividade}
+                </strong>
+            </div>
+
+            <p style='
+                font-size: 16px;
+                line-height: 1.6;
+            '>
+                O certificado está disponível em anexo neste e-mail.
+            </p>
+
+            <p style='
+                margin-top: 30px;
+                font-size: 15px;
+                line-height: 1.5;
+            '>
+                Atenciosamente,<br>
+                <strong>Equipe SICAD</strong>
+            </p>
+
+        </div>
+
+        <!-- RODAPÉ -->
+        <div style='
+            padding: 18px;
+            text-align: center;
+            background-color: #f1f3f7;
+            color: #777777;
+            font-size: 12px;
+        '>
+            Este é um e-mail automático. Por favor, não responda.
+        </div>
+
+    </div>
+
+</body>
+</html>
+";
+
+    // Versão para clientes de e-mail que não suportam HTML
+    $mail->AltBody =
+        "Olá {$row['nome_usuario']},\n\n" .
+        "Seu certificado está disponível.\n\n" .
+        "Atividade: {$row['nome_atividade']}\n\n" .
+        "O certificado está disponível em anexo neste e-mail.\n\n" .
+        "Atenciosamente,\n" .
+        "Equipe SICAD";
+
+    // Anexa o certificado PDF
     $mail->addAttachment($pdfPath, $filename);
+
     $mail->send();
 
     $statusAtual = atualizar_status_certificado($conn, (int) $certCode, (int) $row['atividade_id']);
@@ -1478,7 +1618,10 @@ try {
 } catch (Throwable $e) {
     error_log('enviar_certificado.php: ' . $e->getMessage());
 
-    respond(500, [
+    if (isset($pdfPath) && is_string($pdfPath) && is_file($pdfPath)) {
+        @unlink($pdfPath);
+    }
+    respond($e instanceof DomainException ? 422 : 500, [
         'success' => false,
         'message' => $e->getMessage()
     ]);
