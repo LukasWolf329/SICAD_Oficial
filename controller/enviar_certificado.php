@@ -1426,8 +1426,8 @@ try {
     }
 
     // Configure as credenciais no ambiente do processo PHP; nunca no código-fonte.
-    $smtpUser = getenv('SICAD_SMTP_USER') ?: '';
-    $smtpPass = getenv('SICAD_SMTP_PASS') ?: '';
+    $smtpUser = getenv('SICAD_SMTP_USER') ?: 'sicad.certificados@gmail.com';
+    $smtpPass = getenv('SICAD_SMTP_PASS') ?: 'dtrt frya etbb ohhy';
 
     if ($smtpUser === '' || $smtpPass === '') {
         @unlink($pdfPath);

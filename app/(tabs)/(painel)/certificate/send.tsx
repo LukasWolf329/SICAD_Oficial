@@ -3,16 +3,19 @@ import "../../../../style/global.css";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions,
+  Text, TextInput, View, useWindowDimensions,
 } from "react-native";
+import { useColorScheme } from "nativewind";
 import { Ionicons } from "@expo/vector-icons";
 import { Mainframe } from "../../../../components/NavBar";
 import { router } from "expo-router";
 import { getLastEventoId, getLastEventoNome } from "@/app/utils/lastEvento";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-/** SICAD · envio filtrado e seleção explícita. Substitui somente a tela send.tsx. */
+/** SICAD · filtros e envio individual/lote. Estilos em Tailwind via NativeWind. */
 const API_BASE = "https://sicad.linceonline.com.br/controller";
+// As classes estão escritas por inteiro: o scanner do Tailwind consegue encontrá-las.
+function cx(...classes: string[]): string { return classes.filter(Boolean).join(" "); }
 const PAGE_SIZE = 50;
 const INTERVALO_ENVIO_MS = 250;
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -38,7 +41,8 @@ type Modo = "email" | "download";
 type Escopo = "filtrados" | "selecionados" | "individual";
 type Opcao = { value: string; label: string; detalhe?: string; count?: number };
 type Confirmacao = { modo: Modo; escopo: Escopo; itens: Certificado[]; descricao: string };
-type ResultadoItem = { certificado: Certificado; ok: boolean; incerto: boolean; erro?: string };
+type RetornoOperacao = { aviso?: string; jaEnviado?: boolean; interromper?: boolean };
+type ResultadoItem = { certificado: Certificado; ok: boolean; incerto: boolean; erro?: string; aviso?: string; jaEnviado?: boolean };
 type ResultadoFila = {
   total: number; itens: ResultadoItem[]; naoProcessados: number; interrompido: boolean;
 };
@@ -86,7 +90,7 @@ function normalizarCertificados(data: unknown): { lista: Certificado[]; descarta
       usuario_id: idPositivo(item.usuario_id ?? item.user_id ?? item.participante_id ?? item.fk_Usuario_ID),
       participante: String(item.participante ?? "").trim(),
       email: String(item.email ?? "").trim(),
-      status: Number(item.status ?? 0) === 1 ? 1 : 0,
+      status: Number(item.status_envio ?? item.status ?? 0) === 1 ? 1 : 0,
       atividade_id: idPositivo(item.atividade_id),
       atividade: String(item.atividade ?? "").trim(),
     });
@@ -165,7 +169,7 @@ class ErroApi extends Error {
   }
 }
 async function executarFila(
-  origem: Certificado[], executar: (certificado: Certificado) => Promise<void>,
+  origem: Certificado[], executar: (certificado: Certificado) => Promise<RetornoOperacao | void>,
   opcoes: {
     deveParar: () => boolean;
     aoIniciar?: (certificado: Certificado, indice: number) => void;
@@ -188,8 +192,9 @@ async function executarFila(
     let resultado: ResultadoItem;
     let parar = false;
     try {
-      await executar(certificado);
-      resultado = { certificado, ok: true, incerto: false };
+      const retorno = await executar(certificado);
+      resultado = { certificado, ok: true, incerto: false, aviso: retorno?.aviso, jaEnviado: retorno?.jaEnviado };
+      parar = retorno?.interromper === true;
     } catch (erro) {
       resultado = {
         certificado, ok: false, incerto: erro instanceof ErroApi && erro.incerto,
@@ -218,13 +223,41 @@ function parseApiResponse(raw: string): unknown {
   return null;
 }
 function mensagemResposta(data: unknown, fallback: string): string {
-  return ehRegistro(data) && typeof data.message === "string" ? data.message : fallback;
+  const mensagem = ehRegistro(data) && typeof data.message === "string" ? data.message : fallback;
+  const ref = ehRegistro(data) && typeof data.request_id === "string" ? data.request_id : "";
+  return ref ? `${mensagem} (Referência: ${ref})` : mensagem;
 }
 function nomeArquivo(c: Certificado): string {
   const limpar = (v: string) => textoBusca(v).replace(/[^a-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 70) || "certificado";
   return `${limpar(c.participante)}_${limpar(c.atividade)}_${c.cod_certificado}.pdf`;
 }
+/** Prefere a etapa informada pelo PHP; HTTP 500 legado continua conservador. */
+function interpretarErroApi(data: unknown, status: number, envioEmail: boolean): ErroApi {
+  const obj = ehRegistro(data) ? data : {};
+  const incerto = envioEmail && (typeof obj.envio_incerto === "boolean" ? obj.envio_incerto : status >= 500);
+  return new ErroApi(mensagemResposta(data, `O servidor retornou HTTP ${status}.`), incerto,
+    incerto || obj.interromper === true || [401, 403, 429].includes(status));
+}
+
+function interpretarEnvio(data: unknown): RetornoOperacao {
+  if (!ehRegistro(data) || !sucessoApi(data.success)) throw interpretarErroApi(data, 200, true);
+  if (data.envio_incerto === true) throw interpretarErroApi(data, 200, true);
+  const jaEnviado = data.already_sent === true || data.code === "ALREADY_SENT";
+  const statusPendente = data.status_updated === false;
+  return {
+    jaEnviado,
+    aviso: jaEnviado || statusPendente ? mensagemResposta(data, "Confira o status no servidor antes de reenviar.") : undefined,
+    interromper: statusPendente || data.interromper === true,
+  };
+}
+
 // FIM_LOGICA_TESTAVEL
+
+/** Envia o token real salvo pelo login. O PHP precisa validá-lo no middleware do projeto. */
+async function headersApi(accept: string): Promise<Record<string, string>> {
+  const token = await AsyncStorage.getItem("userToken");
+  return { Accept: accept, "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal, envioEmail = false): Promise<unknown> {
   const controller = new AbortController();
@@ -234,16 +267,13 @@ async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal, en
   const timer = setTimeout(cancelar, envioEmail ? 120000 : 45000);
   try {
     const res = await fetch(url, {
-      method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      method: "POST", headers: await headersApi("application/json"),
       body: JSON.stringify(body), signal: controller.signal,
     });
     const raw = await res.text();
     const data = parseApiResponse(raw);
     if (!res.ok) {
-      // Um HTTP 500 pode ocorrer DEPOIS do SMTP e antes de atualizar o status no banco.
-      const incerto = envioEmail && res.status >= 500;
-      throw new ErroApi(mensagemResposta(data, `O servidor retornou HTTP ${res.status}.`), incerto,
-        incerto || [401, 403, 429].includes(res.status));
+      throw interpretarErroApi(data, res.status, envioEmail);
     }
     if (data === null) throw new ErroApi("Resposta inválida do servidor. Verifique a sessão e o endpoint.", envioEmail, true);
     return data;
@@ -258,7 +288,7 @@ async function postJsonSafe(url: string, body: unknown, signal?: AbortSignal, en
     signal?.removeEventListener("abort", cancelar);
   }
 }
-async function baixarCertificado(c: Certificado): Promise<void> {
+async function baixarCertificado(c: Certificado, eventoId?: number): Promise<void> {
   if (Platform.OS !== "web" || typeof document === "undefined") {
     throw new ErroApi("Abra esta tela no navegador para baixar PDFs.", false, true);
   }
@@ -266,12 +296,12 @@ async function baixarCertificado(c: Certificado): Promise<void> {
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
     const res = await fetch(`${API_BASE}/enviar_certificado.php`, {
-      method: "POST", headers: { Accept: "application/pdf, application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ cod_certificado: c.cod_certificado, modo: "download" }), signal: controller.signal,
+      method: "POST", headers: await headersApi("application/pdf, application/json"),
+      body: JSON.stringify({ cod_certificado: c.cod_certificado, evento_id: eventoId, modo: "download" }), signal: controller.signal,
     });
     if (!res.ok || !(res.headers.get("content-type") || "").toLowerCase().includes("application/pdf")) {
       const data = parseApiResponse(await res.text());
-      throw new ErroApi(mensagemResposta(data, "O servidor não retornou um PDF válido."), false, [401, 403, 429].includes(res.status));
+      throw interpretarErroApi(data, res.status, false);
     }
     const blob = await res.blob();
     if (!(await blob.slice(0, 1024).text()).includes("%PDF-")) throw new ErroApi("Arquivo recebido sem assinatura PDF válida.");
@@ -305,23 +335,20 @@ function Botao({ label, icon, onPress, disabled = false, primary = false, small 
 }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }}
     testID={testID} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => [s.button, small && s.buttonSmall, {
-      borderColor: primary ? "#225fe5" : tema.line, backgroundColor: primary ? "#225fe5" : tema.surface,
-      opacity: disabled ? 0.42 : pressed ? 0.78 : 1,
-    }]}>
+    className={cx("border-[1px] rounded-[9px] flex-row items-center justify-center gap-[7px] active:opacity-80", (small) ? "min-h-[35px]" : "min-h-[42px]", (small) ? "px-[10px]" : "px-[13px]", (small) ? "py-[6px]" : "py-[9px]", (primary) ? "border-[#225fe5]" : "border-[#e1e7f0] dark:border-[#33415a]", (primary) ? "bg-[#225fe5]" : "bg-[#ffffff] dark:bg-[#182438]", (disabled) ? "opacity-[0.42]" : "opacity-100")} >
     {icon && <Ionicons name={icon} size={small ? 16 : 18} color={primary ? "#ffffff" : tema.accent} />}
-    <Text style={[s.buttonText, { color: primary ? "#ffffff" : tema.ink }]}>{label}</Text>
+    <Text className={cx("text-[12px] font-semibold", (primary) ? "text-[#ffffff]" : "text-[#17253e] dark:text-[#edf2fc]")}>{label}</Text>
   </Pressable>;
 }
 function Caixa({ checked, onPress, label, disabled = false, tema, texto, testID }: {
   checked: boolean | "mixed"; onPress: () => void; label: string; disabled?: boolean; tema: Tema; texto?: string; testID?: string;
 }) {
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled }}
-    disabled={disabled} onPress={onPress} testID={testID} style={[s.checkTouch, { opacity: disabled ? .45 : 1 }]}>
-    <View style={[s.checkbox, { borderColor: checked ? "#225fe5" : tema.muted, backgroundColor: checked ? "#225fe5" : tema.surface }]}>
+    disabled={disabled} onPress={onPress} testID={testID} className={cx("min-h-[36px] flex-row items-center gap-[9px] py-[6px] pr-[5px]", (disabled) ? "opacity-[0.45]" : "opacity-100")}>
+    <View className={cx("w-[19px] h-[19px] border-[1.5px] rounded-[4px] items-center justify-center", (checked) ? "border-[#225fe5]" : "border-[#65748b] dark:border-[#abb9cf]", (checked) ? "bg-[#225fe5]" : "bg-[#ffffff] dark:bg-[#182438]")}>
       {!!checked && <Ionicons name={checked === "mixed" ? "remove" : "checkmark"} size={15} color="#fff" />}
     </View>
-    {texto && <Text style={[s.body, { color: tema.ink, flexShrink: 1 }]}>{texto}</Text>}
+    {texto && <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] shrink">{texto}</Text>}
   </Pressable>;
 }
 function Seletor({ label, value, options, onChange, disabled, tema, pesquisavel = true }: {
@@ -332,34 +359,34 @@ function Seletor({ label, value, options, onChange, disabled, tema, pesquisavel 
   const atual = options.find(o => o.value === value);
   const encontrados = useMemo(() => options.filter(o => textoBusca(`${o.label} ${o.detalhe || ""}`).includes(textoBusca(busca))), [options, busca]);
   const fechar = () => { setAberto(false); setBusca(""); };
-  return <View style={s.field}>
-    <Text style={[s.fieldLabel, { color: tema.muted }]}>{label}</Text>
+  return <View className="flex-1 min-w-[205px] gap-[7px]">
+    <Text className="text-[11px] font-semibold tracking-[0.35px] text-[#65748b] dark:text-[#abb9cf]">{label}</Text>
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled, expanded: aberto }}
-      disabled={disabled} onPress={() => setAberto(true)} style={[s.select, { borderColor: tema.line, backgroundColor: tema.surface, opacity: disabled ? .5 : 1 }]}>
-      <Text style={[s.body, { color: tema.ink, flex: 1 }]} numberOfLines={1}>{atual?.label || "Escolher…"}</Text>
+      disabled={disabled} onPress={() => setAberto(true)} className={cx("min-h-[43px] border-[1px] rounded-[8px] px-[12px] py-[9px] flex-row items-center gap-[9px] border-[#e1e7f0] dark:border-[#33415a] bg-[#ffffff] dark:bg-[#182438]", (disabled) ? "opacity-[0.5]" : "opacity-100")}>
+      <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] flex-1" numberOfLines={1}>{atual?.label || "Escolher…"}</Text>
       <Ionicons name="chevron-down" size={16} color={tema.muted} />
     </Pressable>
     <Modal visible={aberto} transparent animationType="fade" onRequestClose={fechar}>
-      <View style={s.overlay}>
-        <View style={[s.modal, { backgroundColor: tema.surface, borderColor: tema.line }]} accessibilityViewIsModal>
-          <View style={s.between}>
-            <Text accessibilityRole="header" style={[s.sectionTitle, { color: tema.ink }]}>{label}</Text>
+      <View className="flex-1 bg-[rgba(13,25,46,0.55)] items-center justify-center p-[16px]">
+        <View className="w-full max-w-[640px] max-h-[94%] rounded-[15px] border-[1px] p-[20px] bg-[#ffffff] dark:bg-[#182438] border-[#e1e7f0] dark:border-[#33415a]" accessibilityViewIsModal>
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px]">
+            <Text accessibilityRole="header" className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">{label}</Text>
             <Botao label="Fechar" icon="close" onPress={fechar} small tema={tema} />
           </View>
           {pesquisavel && <TextInput accessibilityLabel={`Pesquisar ${label.toLowerCase()}`} placeholder="Digite para encontrar…"
             placeholderTextColor={tema.muted} value={busca} onChangeText={setBusca} autoFocus={Platform.OS === "web"}
-            style={[s.input, { color: tema.ink, borderColor: tema.line, marginTop: 14 }]} />}
-          <FlatList style={{ maxHeight: 350, marginTop: 12 }} data={encontrados} keyExtractor={item => item.value || "__todos"}
-            keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={[s.body, { color: tema.muted, padding: 20 }]}>Nenhuma opção encontrada.</Text>}
+            className="border-[1px] rounded-[8px] min-h-[44px] px-[12px] py-[10px] text-[13px] text-[#17253e] dark:text-[#edf2fc] border-[#e1e7f0] dark:border-[#33415a] mt-[14px]" />}
+          <FlatList className="max-h-[350px] mt-[12px]" data={encontrados} keyExtractor={item => item.value || "__todos"}
+            keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf] p-[20px]">Nenhuma opção encontrada.</Text>}
             renderItem={({ item }) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: value === item.value }}
               accessibilityLabel={`${item.label}${item.detalhe ? `, ${item.detalhe}` : ""}`} disabled={disabled}
               onPress={() => { onChange(item.value); fechar(); }}
-              style={[s.option, { backgroundColor: value === item.value ? tema.soft : tema.surface, borderColor: tema.line }]}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[s.body, { color: tema.ink, fontWeight: "600" }]}>{item.label}</Text>
-                {item.detalhe && <Text style={[s.caption, { color: tema.muted }]}>{item.detalhe}</Text>}
+              className={cx("flex-row items-center gap-[9px] p-[13px] border-b-[1px] rounded-[7px] mb-[3px] border-[#e1e7f0] dark:border-[#33415a]", (value === item.value) ? "bg-[#eef4ff] dark:bg-[#243b60]" : "bg-[#ffffff] dark:bg-[#182438]")}>
+              <View className="flex-1 gap-[4px]">
+                <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] font-semibold">{item.label}</Text>
+                {item.detalhe && <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{item.detalhe}</Text>}
               </View>
-              {typeof item.count === "number" && <Text style={[s.count, { color: tema.accent, backgroundColor: tema.soft }]}>{item.count}</Text>}
+              {typeof item.count === "number" && <Text className="text-[11px] font-bold px-[8px] py-[4px] rounded-[6px] text-[#225fe5] dark:text-[#94b9ff] bg-[#eef4ff] dark:bg-[#243b60]">{item.count}</Text>}
               {value === item.value && <Ionicons name="checkmark-circle" size={20} color={tema.accent} />}
             </Pressable>} />
         </View>
@@ -368,9 +395,9 @@ function Seletor({ label, value, options, onChange, disabled, tema, pesquisavel 
   </View>;
 }
 function Status({ enviado, tema }: { enviado: boolean; tema: Tema }) {
-  return <View style={[s.badge, { backgroundColor: enviado ? tema.greenBg : tema.amberBg }]}>
+  return <View className={cx("self-start flex-row items-center gap-[5px] rounded-[7px] py-[5px] px-[8px]", (enviado) ? "bg-[#eaf7f0] dark:bg-[#153b32]" : "bg-[#fff7e8] dark:bg-[#3f3222]")}>
     <Ionicons name={enviado ? "checkmark-circle-outline" : "time-outline"} size={14} color={enviado ? tema.green : tema.amber} />
-    <Text style={[s.caption, { color: enviado ? tema.green : tema.amber, fontWeight: "600" }]}>{enviado ? "Enviado" : "Não enviado"}</Text>
+    <Text className={cx("text-[11px] leading-[17px] font-semibold", (enviado) ? "text-[#14775e] dark:text-[#83d6b4]" : "text-[#966118] dark:text-[#f4cc7f]")}>{enviado ? "Enviado" : "Não enviado"}</Text>
   </View>;
 }
 function Linha({ c, checked, busy, ativo, tema, compacto, onCheck, onUser, onActivity, onSend, onDownload }: {
@@ -379,39 +406,40 @@ function Linha({ c, checked, busy, ativo, tema, compacto, onCheck, onUser, onAct
 }) {
   const nome = <Pressable accessibilityRole="button" accessibilityLabel={`Ver certificados de ${c.participante || "participante"}, ${c.email}, certificado ${c.cod_certificado}`}
     onPress={onUser} disabled={busy}>
-    <Text style={[s.body, { color: tema.ink, fontWeight: "600" }]}>{c.participante || "Participante não informado"}</Text>
-    <Text selectable style={[s.caption, { color: emailValido(c.email) ? tema.muted : tema.danger, marginTop: 5 }]}>{c.email || "Sem e-mail cadastrado"}</Text>
+    <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] font-semibold">{c.participante || "Participante não informado"}</Text>
+    <Text selectable className={cx("text-[11px] leading-[17px] mt-[5px]", (emailValido(c.email)) ? "text-[#65748b] dark:text-[#abb9cf]" : "text-[#b12b44] dark:text-[#ffadba]")}>{c.email || "Sem e-mail cadastrado"}</Text>
   </Pressable>;
   const atividade = <Pressable accessibilityRole="button" accessibilityLabel={`Ver atividade ${c.atividade || "não informada"}, certificado ${c.cod_certificado}`}
     onPress={onActivity} disabled={busy}>
-    <Text style={[s.body, { color: tema.accent }]}>{c.atividade || "Atividade não informada"}</Text>
-    <Text style={[s.caption, { color: tema.muted, marginTop: 4 }]}>Certificado #{c.cod_certificado}</Text>
+    <Text className="text-[13px] leading-[20px] text-[#225fe5] dark:text-[#94b9ff]">{c.atividade || "Atividade não informada"}</Text>
+    <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[4px]">Certificado #{c.cod_certificado}</Text>
   </Pressable>;
-  const acoes = <View style={s.row}>
+  const acoes = <View className="flex-row items-center gap-[8px]">
     <Botao tema={tema} small icon="mail-outline" label={c.status === 1 ? "Reenviar" : "Enviar"} onPress={onSend} disabled={busy || !emailValido(c.email)} testID={`enviar-${c.cod_certificado}`} />
     <Botao tema={tema} small icon="download-outline" label="PDF" onPress={onDownload} disabled={busy} testID={`baixar-${c.cod_certificado}`} />
   </View>;
   const check = <Caixa tema={tema} checked={checked} onPress={onCheck} disabled={busy}
     label={`Selecionar certificado ${c.cod_certificado} de ${c.participante}`} testID={`check-${c.cod_certificado}`} />;
-  return <View testID={`certificado-${c.cod_certificado}`} style={[s.tableRow, compacto && s.cardRow, { borderColor: tema.line, backgroundColor: checked || ativo ? tema.soft : tema.surface }]}>
+  return <View testID={`certificado-${c.cod_certificado}`} className={cx("px-[18px] py-[15px] border-b-[1px] border-[#e1e7f0] dark:border-[#33415a]", (compacto) ? "flex-col" : "flex-row", (compacto) ? "items-stretch" : "items-center", (compacto) ? "gap-[12px]" : "", (checked || ativo) ? "bg-[#eef4ff] dark:bg-[#243b60]" : "bg-[#ffffff] dark:bg-[#182438]")}>
     {compacto ? <>
-      <View style={[s.row, { alignItems: "flex-start" }]}>{check}<View style={{ flex: 1 }}>{nome}</View>{ativo && <ActivityIndicator size="small" color={tema.accent} />}</View>
-      <View style={{ paddingLeft: 36 }}>{atividade}</View>
-      <View style={s.between}><Status enviado={c.status === 1} tema={tema} />{acoes}</View>
+      <View className="flex-row items-start gap-[8px]">{check}<View className="flex-1">{nome}</View>{ativo && <ActivityIndicator size="small" color={tema.accent} />}</View>
+      <View className="pl-[36px]">{atividade}</View>
+      <View className="flex-row items-center justify-between flex-wrap gap-[12px]"><Status enviado={c.status === 1} tema={tema} />{acoes}</View>
     </> : <>
-      <View style={{ width: 42 }}>{check}</View>
-      <View style={{ flex: 1.3, minWidth: 220, paddingRight: 20 }}>{nome}</View>
-      <View style={{ flex: 1.5, minWidth: 250, paddingRight: 20 }}>{atividade}</View>
-      <View style={{ width: 140 }}><Status enviado={c.status === 1} tema={tema} /></View>
-      <View style={{ width: 206 }}>{ativo ? <View style={s.row}><ActivityIndicator size="small" color={tema.accent} /><Text style={[s.caption, { color: tema.muted }]}>Processando…</Text></View> : acoes}</View>
+      <View className="w-[42px]">{check}</View>
+      <View className="grow-[1.3] shrink basis-0 min-w-[220px] pr-[20px]">{nome}</View>
+      <View className="grow-[1.5] shrink basis-0 min-w-[250px] pr-[20px]">{atividade}</View>
+      <View className="w-[140px]"><Status enviado={c.status === 1} tema={tema} /></View>
+      <View className="w-[206px]">{ativo ? <View className="flex-row items-center gap-[8px]"><ActivityIndicator size="small" color={tema.accent} /><Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">Processando…</Text></View> : acoes}</View>
     </>}
   </View>;
 }
 
-export default function SendCerticate() {
-  const tema = useColorScheme() === "dark" ? ESCURO : CLARO;
+export default function SendCertificate() {
+  const { colorScheme } = useColorScheme();
+  const tema = colorScheme === "dark" ? ESCURO : CLARO;
   const { width } = useWindowDimensions();
-  const compacto = width < 850;
+  const compacto = width < 1100;
   const [eventoId, setEventoId] = useState<number | null>(null);
   const [eventoNome, setEventoNome] = useState("Evento");
   const [certificados, setCertificados] = useState<Certificado[]>([]);
@@ -536,17 +564,19 @@ export default function SendCerticate() {
     emOperacao.current = true;
     interromper.current = false;
     const atual = confirmacao;
+    const autorizarReenvio = incluirEnviados;
     const itens = plano.enviar.map(c => ({ ...c }));
     setConfirmacao(null); setOcupado(true); setParando(false); setRelatorio(null); setMostrarDetalhes(false);
     setProgresso({ total: itens.length, concluidos: 0, atual: 0, nome: "" });
     try {
       const resultado = await executarFila(itens, async c => {
-        if (atual.modo === "download") { await baixarCertificado(c); return; }
-        const data = await postJsonSafe(`${API_BASE}/enviar_certificado.php`, { cod_certificado: c.cod_certificado, modo: "email" }, undefined, true);
-        if (!ehRegistro(data) || !sucessoApi(data.success)) {
-          throw new ErroApi(mensagemResposta(data, "O servidor não confirmou o envio."));
-        }
+        if (atual.modo === "download") { await baixarCertificado(c, eventoId ?? undefined); return; }
+        const data = await postJsonSafe(`${API_BASE}/enviar_certificado.php`, {
+          cod_certificado: c.cod_certificado, evento_id: eventoId, modo: "email", reenviar: autorizarReenvio,
+        }, undefined, true);
+        const retorno = interpretarEnvio(data);
         if (montado.current) setCertificados(prev => prev.map(item => item.cod_certificado === c.cod_certificado ? { ...item, status: 1 } : item));
+        return retorno;
       }, {
         deveParar: () => interromper.current || !montado.current,
         aoIniciar: (c) => { if (montado.current) setProgresso(prev => ({ ...prev, atual: c.cod_certificado, nome: `${c.participante} · ${c.atividade}` })); },
@@ -565,8 +595,8 @@ export default function SendCerticate() {
     }
   }
   const colunaOrdem = (campo: Ordem["campo"], label: string) => <Pressable accessibilityRole="button" accessibilityLabel={`Ordenar por ${label.toLowerCase()}`}
-    disabled={bloqueado} onPress={() => { setOrdem({ campo, direcao: ordem.campo === campo && ordem.direcao === "asc" ? "desc" : "asc" }); setPagina(0); }} style={s.row}>
-    <Text style={[s.tableHeading, { color: tema.muted }]}>{label}</Text>
+    disabled={bloqueado} onPress={() => { setOrdem({ campo, direcao: ordem.campo === campo && ordem.direcao === "asc" ? "desc" : "asc" }); setPagina(0); }} className="flex-row items-center gap-[8px]">
+    <Text className="text-[10px] font-bold tracking-[0.65px] text-[#65748b] dark:text-[#abb9cf]">{label}</Text>
     <Ionicons name={ordem.campo === campo ? (ordem.direcao === "asc" ? "arrow-up" : "arrow-down") : "swap-vertical"} size={13} color={ordem.campo === campo ? tema.accent : tema.muted} />
   </Pressable>;
   const renderLinha = (c: Certificado) => <Linha key={c.cod_certificado} c={c} checked={selecionados.has(c.cod_certificado)} busy={bloqueado}
@@ -575,44 +605,46 @@ export default function SendCerticate() {
     onUser={() => mudarFiltros({ ...FILTROS_INICIAIS, participante: chaveParticipante(c) })}
     onActivity={() => mudarFiltros({ ...FILTROS_INICIAIS, atividade: chaveAtividade(c) })}
     onSend={() => abrirOperacao("email", "individual", c)} onDownload={() => abrirOperacao("download", "individual", c)} />;
-  const resultadoOk = relatorio?.itens.filter(i => i.ok).length || 0;
+  const resultadoOk = relatorio?.itens.filter(i => i.ok && !i.jaEnviado).length || 0;
+  const resultadoJaEnviado = relatorio?.itens.filter(i => i.jaEnviado).length || 0;
+  const resultadoAvisos = relatorio?.itens.filter(i => !!i.aviso && !i.jaEnviado).length || 0;
   const resultadoIncerto = relatorio?.itens.filter(i => i.incerto).length || 0;
   const resultadoFalhas = relatorio?.itens.filter(i => !i.ok && !i.incerto).length || 0;
 
-  return <ScrollView style={{ flex: 1, backgroundColor: tema.bg }} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+  return <ScrollView className="flex-1 bg-[#f5f7fb] dark:bg-[#101827]" contentContainerClassName="pb-[32px]" keyboardShouldPersistTaps="handled">
     <Mainframe name={eventoNome} photoUrl="evento.png" link="www.evento.com">
-      <View style={[s.page, { paddingHorizontal: compacto ? 16 : 30 }]}>
-        <View style={s.between}>
-          <View><Text style={[s.eyebrow, { color: tema.muted }]}>CERTIFICADOS / DISTRIBUIÇÃO</Text>
-            <Text accessibilityRole="header" style={[s.title, { color: tema.ink }]}>Envio de certificados</Text>
-            <Text style={[s.body, { color: tema.muted, marginTop: 7 }]}>Escolha quem recebe. Confira o lote antes de enviar.</Text>
+      <View className={cx("w-full max-w-[1600px] self-center pt-[22px] gap-[18px]", (compacto) ? "px-[16px]" : "px-[30px]")}>
+        <View className="flex-row items-center justify-between flex-wrap gap-[12px]">
+          <View><Text className="text-[10px] font-bold tracking-[1.5px] mb-[8px] text-[#65748b] dark:text-[#abb9cf]">CERTIFICADOS / DISTRIBUIÇÃO</Text>
+            <Text accessibilityRole="header" className="text-[27px] font-bold tracking-[-0.6px] text-[#17253e] dark:text-[#edf2fc]">Envio de certificados</Text>
+            <Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf] mt-[7px]">Escolha quem recebe. Confira o lote antes de enviar.</Text>
           </View>
-          <View style={s.rowWrap}>
+          <View className="flex-row items-center gap-[8px] flex-wrap max-w-full shrink">
             <Botao tema={tema} label="Criar" icon="add" disabled={ocupado} onPress={() => router.push("./page")} />
             <Botao tema={tema} label="Configurações" icon="settings-outline" disabled={ocupado} onPress={() => router.push("./settings")} />
           </View>
         </View>
-        <View style={[s.stats, { backgroundColor: tema.surface, borderColor: tema.line }]}>
+        <View className="rounded-[13px] border-[1px] flex-row flex-wrap px-[18px] py-[4px] bg-[#ffffff] dark:bg-[#182438] border-[#e1e7f0] dark:border-[#33415a]">
           {[{ label: "Neste evento", value: certificados.length, icon: "document-text-outline" },
           { label: "Não enviados", value: qtdPendentes, icon: "time-outline" },
           { label: "No filtro", value: filtrados.length, icon: "filter-outline" },
           { label: "Selecionados", value: marcados.length, icon: "checkbox-outline" }].map(item =>
-            <View key={item.label} style={s.stat}><Ionicons name={item.icon as IoniconName} size={19} color={tema.accent} />
-              <View><Text style={[s.statValue, { color: tema.ink }]}>{item.value}</Text><Text style={[s.caption, { color: tema.muted }]}>{item.label}</Text></View>
+            <View key={item.label} className="min-w-[130px] grow basis-[130px] py-[14px] flex-row items-center gap-[12px]"><Ionicons name={item.icon as IoniconName} size={19} color={tema.accent} />
+              <View><Text className="text-[22px] font-bold mb-[3px] text-[#17253e] dark:text-[#edf2fc]">{item.value}</Text><Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{item.label}</Text></View>
             </View>)}
         </View>
-        <View style={[s.panel, { backgroundColor: tema.surface, borderColor: tema.line }]}>
-          <View style={s.between}>
-            <View style={s.row}><Ionicons name="options-outline" size={19} color={tema.accent} /><Text style={[s.sectionTitle, { color: tema.ink }]}>Filtrar e organizar</Text></View>
+        <View className="rounded-[13px] border-[1px] p-[18px] overflow-hidden bg-[#ffffff] dark:bg-[#182438] border-[#e1e7f0] dark:border-[#33415a]">
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px]">
+            <View className="flex-row items-center gap-[8px]"><Ionicons name="options-outline" size={19} color={tema.accent} /><Text className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">Filtrar e organizar</Text></View>
             <Botao tema={tema} small label="Limpar filtros" icon="close-circle-outline" disabled={bloqueado || !temFiltros} onPress={() => mudarFiltros({ ...FILTROS_INICIAIS })} />
           </View>
-          <View style={[s.searchBox, { borderColor: tema.line, backgroundColor: tema.bg }]}>
+          <View className="mt-[16px] rounded-[9px] border-[1px] flex-row items-center px-[12px] gap-[9px] border-[#e1e7f0] dark:border-[#33415a] bg-[#f5f7fb] dark:bg-[#101827]">
             <Ionicons name="search" size={19} color={tema.muted} />
             <TextInput accessibilityLabel="Buscar certificados" placeholder="Buscar por nome, e-mail, atividade ou código" placeholderTextColor={tema.muted}
               value={filtros.busca} onChangeText={busca => mudarFiltros({ ...filtros, busca })} editable={!bloqueado}
-              style={[s.searchInput, { color: tema.ink }]} />
+              className="flex-1 h-[44px] text-[13px] min-w-[0px] text-[#17253e] dark:text-[#edf2fc]" />
           </View>
-          <View style={s.fields}>
+          <View className="flex-row flex-wrap gap-[14px] mt-[14px]">
             <Seletor tema={tema} label="Participante" value={filtros.participante} disabled={bloqueado}
               options={[{ value: "", label: "Todos os participantes" }, ...participantes]}
               onChange={participante => mudarFiltros({ ...filtros, participante })} />
@@ -626,43 +658,45 @@ export default function SendCerticate() {
               options={[{ value: "nome:asc", label: "Nome · A a Z" }, { value: "nome:desc", label: "Nome · Z a A" }, { value: "atividade:asc", label: "Atividade · A a Z" }, { value: "atividade:desc", label: "Atividade · Z a A" }]}
               onChange={value => { const [campo, direcao] = value.split(":"); setOrdem({ campo: campo as Ordem["campo"], direcao: direcao as Ordem["direcao"] }); setPagina(0); }} />
           </View>
-          <Text style={[s.caption, { color: tema.muted, marginTop: 13 }]}>Os filtros se combinam. Alterar um filtro limpa a seleção; mudar a ordem ou a página mantém os marcados.</Text>
-          {filtros.participante.startsWith("cadastro:") && <Text style={[s.caption, { color: tema.amber, marginTop: 8 }]}>A API não informou o ID deste usuário. O recorte usa a combinação exata de nome e e-mail.</Text>}
-          {filtros.atividade.startsWith("titulo:") && <Text style={[s.caption, { color: tema.amber, marginTop: 8 }]}>A API não informou o ID desta atividade. O recorte usa o título exato; confira atividades com o mesmo nome.</Text>}
+          <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[13px]">Os filtros se combinam. Alterar um filtro limpa a seleção; mudar a ordem ou a página mantém os marcados.</Text>
+          {filtros.participante.startsWith("cadastro:") && <Text className="text-[11px] leading-[17px] text-[#966118] dark:text-[#f4cc7f] mt-[8px]">A API não informou o ID deste usuário. O recorte usa a combinação exata de nome e e-mail.</Text>}
+          {filtros.atividade.startsWith("titulo:") && <Text className="text-[11px] leading-[17px] text-[#966118] dark:text-[#f4cc7f] mt-[8px]">A API não informou o ID desta atividade. O recorte usa o título exato; confira atividades com o mesmo nome.</Text>}
         </View>
-        {(!!erroCarga || !!avisoDados || !!aviso) && <View accessibilityRole="alert" style={[s.notice, { backgroundColor: tema.amberBg, borderColor: tema.line }]}>
-          <Text style={[s.body, { color: erroCarga ? tema.danger : tema.amber }]}>{[erroCarga, avisoDados, aviso].filter(Boolean).join("\n")}</Text>
+        {(!!erroCarga || !!avisoDados || !!aviso) && <View accessibilityRole="alert" className="p-[15px] rounded-[10px] border-[1px] bg-[#fff7e8] dark:bg-[#3f3222] border-[#e1e7f0] dark:border-[#33415a]">
+          <Text className={cx("text-[13px] leading-[20px]", (erroCarga) ? "text-[#b12b44] dark:text-[#ffadba]" : "text-[#966118] dark:text-[#f4cc7f]")}>{[erroCarga, avisoDados, aviso].filter(Boolean).join("\n")}</Text>
         </View>}
-        {ocupado && <View style={[s.panel, { backgroundColor: tema.soft, borderColor: tema.line }]} accessibilityLiveRegion="polite">
-          <View style={s.between}><View style={s.row}><ActivityIndicator color={tema.accent} /><Text style={[s.sectionTitle, { color: tema.ink }]}>{parando ? "Parando após o certificado atual…" : "Processando certificados…"}</Text></View>
+        {ocupado && <View className="rounded-[13px] border-[1px] p-[18px] overflow-hidden bg-[#eef4ff] dark:bg-[#243b60] border-[#e1e7f0] dark:border-[#33415a]" accessibilityLiveRegion="polite">
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px]"><View className="flex-row items-center gap-[8px]"><ActivityIndicator color={tema.accent} /><Text className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">{parando ? "Parando após o certificado atual…" : "Processando certificados…"}</Text></View>
             <Botao tema={tema} small label="Parar lote" icon="stop-circle-outline" disabled={parando} onPress={() => { interromper.current = true; setParando(true); }} />
           </View>
-          <Text style={[s.body, { color: tema.muted, marginTop: 12 }]}>{progresso.concluidos} de {progresso.total} processados · {progresso.nome}</Text>
-          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: progresso.total, now: progresso.concluidos }} style={[s.progressTrack, { backgroundColor: tema.line }]}>
-            <View style={{ height: 6, borderRadius: 10, backgroundColor: tema.accent, width: `${progresso.total ? 100 * progressoSeguro(progresso.concluidos, progresso.total) : 0}%` }} />
+          <Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf] mt-[12px]">{progresso.concluidos} de {progresso.total} processados · {progresso.nome}</Text>
+          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: progresso.total, now: progresso.concluidos }} className="h-[6px] rounded-[10px] overflow-hidden mt-[13px] bg-[#e1e7f0] dark:bg-[#33415a]">
+            <View className="h-[6px] rounded-[10px] bg-[#225fe5] dark:bg-[#94b9ff]" style={{width: `${progresso.total ? 100 * progressoSeguro(progresso.concluidos, progresso.total) : 0}%`}} />
           </View>
-          <Text style={[s.caption, { color: tema.muted, marginTop: 8 }]}>Mantenha a tela aberta. Parar não desfaz envios concluídos nem cancela a requisição já iniciada.</Text>
+          <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[8px]">Mantenha a tela aberta. Parar não desfaz envios concluídos nem cancela a requisição já iniciada.</Text>
         </View>}
-        {relatorio && <View style={[s.panel, { backgroundColor: resultadoFalhas || resultadoIncerto ? tema.amberBg : tema.greenBg, borderColor: tema.line }]} accessibilityLiveRegion="polite">
-          <View style={s.between}><Text style={[s.sectionTitle, { color: tema.ink }]}>{relatorio.interrompido ? "Lote interrompido" : "Operação concluída"}</Text>
+        {relatorio && <View className={cx("rounded-[13px] border-[1px] p-[18px] overflow-hidden border-[#e1e7f0] dark:border-[#33415a]", (resultadoFalhas || resultadoIncerto || resultadoAvisos) ? "bg-[#fff7e8] dark:bg-[#3f3222]" : "bg-[#eaf7f0] dark:bg-[#153b32]")} accessibilityLiveRegion="polite">
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px]"><Text className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">{relatorio.interrompido ? "Lote interrompido" : "Operação concluída"}</Text>
             <Botao tema={tema} small label={mostrarDetalhes ? "Ocultar resultado" : "Ver resultado"} icon="list-outline" onPress={() => setMostrarDetalhes(!mostrarDetalhes)} />
           </View>
-          <Text style={[s.body, { color: tema.ink, marginTop: 10 }]}>{resultadoOk} {relatorio.modo === "email" ? "envio(s) confirmado(s) pelo servidor" : "download(s) iniciado(s)"} · {resultadoFalhas} falha(s) · {resultadoIncerto} não confirmado(s) · {relatorio.naoProcessados} não processado(s).</Text>
-          {resultadoIncerto > 0 && <Text style={[s.body, { color: tema.danger, marginTop: 9 }]}>A resposta de um envio não foi confirmada. Ele pode ter sido enviado. Confira no servidor antes de reenviar; não houve nova tentativa automática.</Text>}
-          {mostrarDetalhes && <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={[s.caption, { color: tema.muted }]}>{relatorio.descricao}</Text>
-            <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>{relatorio.itens.map(item => <View key={item.certificado.cod_certificado} style={[s.resultLine, { borderColor: tema.line }]}>
-              <Text style={[s.body, { color: tema.ink }]}>{item.ok ? "✓" : "!"} #{item.certificado.cod_certificado} · {item.certificado.participante} · {item.certificado.atividade}</Text>
-              {!!item.erro && <Text style={[s.caption, { color: tema.danger, marginTop: 4 }]}>{item.erro}</Text>}
+          <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] mt-[10px]">{resultadoOk} {relatorio.modo === "email" ? "e-mail(s) aceito(s) pelo SMTP" : "download(s) iniciado(s)"} · {resultadoJaEnviado} já enviado(s), sem repetir · {resultadoFalhas} falha(s) · {resultadoIncerto} não confirmado(s) · {relatorio.naoProcessados} não processado(s).</Text>
+          {resultadoAvisos > 0 && <Text className="text-[13px] leading-[20px] text-[#b12b44] dark:text-[#ffadba] mt-[9px]">O SMTP aceitou um envio, mas houve falha ao registrar o status. O lote foi interrompido. Confira o resultado e não reenvie automaticamente.</Text>}
+          {resultadoIncerto > 0 && <Text className="text-[13px] leading-[20px] text-[#b12b44] dark:text-[#ffadba] mt-[9px]">A resposta de um envio não foi confirmada. Ele pode ter sido enviado. Confira no servidor antes de reenviar; não houve nova tentativa automática.</Text>}
+          {mostrarDetalhes && <View className="mt-[14px] gap-[8px]">
+            <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{relatorio.descricao}</Text>
+            <ScrollView className="max-h-[240px]" nestedScrollEnabled>{relatorio.itens.map(item => <View key={item.certificado.cod_certificado} className="py-[10px] border-b-[1px] border-[#e1e7f0] dark:border-[#33415a]">
+              <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc]">{item.ok ? "✓" : "!"} #{item.certificado.cod_certificado} · {item.certificado.participante} · {item.certificado.atividade}</Text>
+              {!!item.aviso && <Text className="text-[11px] leading-[17px] text-[#966118] dark:text-[#f4cc7f] mt-[4px]">{item.aviso}</Text>}
+              {!!item.erro && <Text className="text-[11px] leading-[17px] text-[#b12b44] dark:text-[#ffadba] mt-[4px]">{item.erro}</Text>}
             </View>)}</ScrollView>
           </View>}
         </View>}
-        <View style={[s.panel, { padding: 0, backgroundColor: tema.surface, borderColor: tema.line }]}>
-          <View style={[s.between, { padding: 18 }]}>
-            <View style={{ flex: 1, minWidth: 200 }}><Text style={[s.sectionTitle, { color: tema.ink }]}>Certificados disponíveis</Text>
-              <Text style={[s.caption, { color: tema.muted, marginTop: 6 }]}>{resumoFiltro}</Text>
+        <View className="rounded-[13px] border-[1px] p-[0px] overflow-hidden bg-[#ffffff] dark:bg-[#182438] border-[#e1e7f0] dark:border-[#33415a]">
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px] p-[18px]">
+            <View className="flex-1 min-w-[200px]"><Text className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">Certificados disponíveis</Text>
+              <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[6px]">{resumoFiltro}</Text>
             </View>
-            <View style={s.rowWrap}>
+            <View className="flex-row items-center gap-[8px] flex-wrap max-w-full shrink">
               <Botao tema={tema} small label="Atualizar" icon="refresh-outline" disabled={ocupado || !!confirmacao || loadingCertificados || loadingEvento || !eventoId}
                 onPress={() => { setSelecionados(new Set()); setRecarregar(v => v + 1); }} />
               <Botao tema={tema} label={`Baixar filtrados (${filtrados.length})`} icon="download-outline" disabled={bloqueado || !filtrados.length}
@@ -671,76 +705,76 @@ export default function SendCerticate() {
                 onPress={() => abrirOperacao("email", "filtrados")} testID="enviar-filtrados" />
             </View>
           </View>
-          <View style={[s.selectionBar, { backgroundColor: tema.soft, borderColor: tema.line }]}>
+          <View className="flex-row items-center justify-between flex-wrap gap-[10px] px-[18px] py-[12px] border-t-[1px] border-b-[1px] bg-[#eef4ff] dark:bg-[#243b60] border-[#e1e7f0] dark:border-[#33415a]">
             <Caixa tema={tema} checked={todosMarcados ? true : marcados.length ? "mixed" : false} disabled={bloqueado || !filtrados.length}
               onPress={alternarTodos} label="Selecionar todos os certificados filtrados" texto={`Marcar todos os ${filtrados.length} filtrados`} testID="selecionar-todos" />
-            <View style={s.rowWrap}>
-              <Text style={[s.body, { color: tema.ink, fontWeight: "600" }]}>{marcados.length} selecionado(s)</Text>
+            <View className="flex-row items-center gap-[8px] flex-wrap max-w-full shrink">
+              <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] font-semibold">{marcados.length} selecionado(s)</Text>
               {marcados.length > 0 && <Botao tema={tema} small label="Limpar seleção" disabled={bloqueado} onPress={() => setSelecionados(new Set())} />}
               <Botao tema={tema} label="Baixar selecionados" icon="download-outline" disabled={bloqueado || !marcados.length} onPress={() => abrirOperacao("download", "selecionados")} testID="baixar-selecionados" />
               <Botao tema={tema} primary label={`Enviar selecionados (${marcados.length})`} icon="send-outline" disabled={bloqueado || !marcados.length}
                 onPress={() => abrirOperacao("email", "selecionados")} testID="enviar-selecionados" />
             </View>
           </View>
-          {(loadingEvento || loadingCertificados) ? <View style={s.empty}><ActivityIndicator color={tema.accent} /><Text style={[s.body, { color: tema.muted }]}>Carregando certificados…</Text></View>
-            : !eventoId ? <View style={s.empty}><Text style={[s.body, { color: tema.muted }]}>Selecione um evento para consultar seus certificados.</Text></View>
-              : !filtrados.length ? <View style={s.empty}><Ionicons name="search-outline" size={30} color={tema.muted} /><Text style={[s.body, { color: tema.muted }]}>{erroCarga ? "A listagem não pôde ser carregada." : certificados.length ? "Nenhum certificado atende aos filtros." : "Nenhum certificado disponível neste evento."}</Text></View>
+          {(loadingEvento || loadingCertificados) ? <View className="min-h-[160px] p-[24px] gap-[12px] justify-center items-center"><ActivityIndicator color={tema.accent} /><Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf]">Carregando certificados…</Text></View>
+            : !eventoId ? <View className="min-h-[160px] p-[24px] gap-[12px] justify-center items-center"><Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf]">Selecione um evento para consultar seus certificados.</Text></View>
+              : !filtrados.length ? <View className="min-h-[160px] p-[24px] gap-[12px] justify-center items-center"><Ionicons name="search-outline" size={30} color={tema.muted} /><Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf]">{erroCarga ? "A listagem não pôde ser carregada." : certificados.length ? "Nenhum certificado atende aos filtros." : "Nenhum certificado disponível neste evento."}</Text></View>
                 : compacto ? <View>{visiveis.map(renderLinha)}</View> : <ScrollView horizontal showsHorizontalScrollIndicator>
-                  <View style={{ minWidth: 1000, width: "100%", flex: 1 }}>
-                    <View style={[s.tableRow, { borderColor: tema.line, backgroundColor: tema.bg }]}>
-                      <View style={{ width: 42 }} />
-                      <View style={{ flex: 1.3, minWidth: 220 }}>{colunaOrdem("nome", "PARTICIPANTE / E-MAIL")}</View>
-                      <View style={{ flex: 1.5, minWidth: 250 }}>{colunaOrdem("atividade", "ATIVIDADE")}</View>
-                      <Text style={[s.tableHeading, { width: 140, color: tema.muted }]}>STATUS</Text>
-                      <Text style={[s.tableHeading, { width: 206, color: tema.muted }]}>AÇÕES</Text>
+                  <View className="min-w-[1000px] w-full flex-1">
+                    <View className="flex-row items-center px-[18px] py-[15px] border-b-[1px] border-[#e1e7f0] dark:border-[#33415a] bg-[#f5f7fb] dark:bg-[#101827]">
+                      <View className="w-[42px]" />
+                      <View className="grow-[1.3] shrink basis-0 min-w-[220px]">{colunaOrdem("nome", "PARTICIPANTE / E-MAIL")}</View>
+                      <View className="grow-[1.5] shrink basis-0 min-w-[250px]">{colunaOrdem("atividade", "ATIVIDADE")}</View>
+                      <Text className="text-[10px] font-bold tracking-[0.65px] w-[140px] text-[#65748b] dark:text-[#abb9cf]">STATUS</Text>
+                      <Text className="text-[10px] font-bold tracking-[0.65px] w-[206px] text-[#65748b] dark:text-[#abb9cf]">AÇÕES</Text>
                     </View>
                     {visiveis.map(renderLinha)}
                   </View>
                 </ScrollView>}
-          <View style={[s.between, { padding: 16 }]}>
-            <View style={{ flex: 1, minWidth: 190 }}>
-              <Text style={[s.caption, { color: tema.muted }]}>{filtrados.length ? `${paginaAtual * PAGE_SIZE + 1}–${Math.min((paginaAtual + 1) * PAGE_SIZE, filtrados.length)}` : "0"} de {filtrados.length} filtrados · {certificados.length} no evento</Text>
-              <Text style={[s.caption, { color: tema.muted, marginTop: 5 }]}>A seleção de todos e as ações filtradas incluem todas as páginas.</Text>
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px] p-[16px]">
+            <View className="flex-1 min-w-[190px]">
+              <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{filtrados.length ? `${paginaAtual * PAGE_SIZE + 1}–${Math.min((paginaAtual + 1) * PAGE_SIZE, filtrados.length)}` : "0"} de {filtrados.length} filtrados · {certificados.length} no evento</Text>
+              <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[5px]">A seleção de todos e as ações filtradas incluem todas as páginas.</Text>
             </View>
-            <View style={s.row}>
+            <View className="flex-row items-center gap-[8px]">
               <Botao tema={tema} small label="Anterior" icon="chevron-back" disabled={bloqueado || paginaAtual === 0} onPress={() => setPagina(paginaAtual - 1)} />
-              <Text style={[s.caption, { color: tema.muted }]}>{paginaAtual + 1} / {paginas}</Text>
+              <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{paginaAtual + 1} / {paginas}</Text>
               <Botao tema={tema} small label="Próxima" icon="chevron-forward" disabled={bloqueado || paginaAtual >= paginas - 1} onPress={() => setPagina(paginaAtual + 1)} />
             </View>
           </View>
         </View>
-        <Text style={[s.caption, { color: tema.muted, textAlign: "center", lineHeight: 19 }]}>Somente certificados retornados pela listagem do evento. Os filtros não criam certificados nem alteram inscrições ou presenças.</Text>
+        <Text className="text-[11px] leading-[19px] text-[#65748b] dark:text-[#abb9cf] text-center">Somente certificados retornados pela listagem do evento. Os filtros não criam certificados nem alteram inscrições ou presenças.</Text>
       </View>
     </Mainframe>
     <Modal visible={!!confirmacao} transparent animationType="fade" onRequestClose={() => { if (!emOperacao.current) setConfirmacao(null); }}>
-      <View style={s.overlay}>
-        {confirmacao && plano && <View accessibilityViewIsModal style={[s.modal, { backgroundColor: tema.surface, borderColor: tema.line }]}>
-          <View style={s.between}>
-            <Text accessibilityRole="header" style={[s.sectionTitle, { color: tema.ink }]}>{confirmacao.modo === "email" ? "Conferir envio por e-mail" : "Conferir download"}</Text>
+      <View className="flex-1 bg-[rgba(13,25,46,0.55)] items-center justify-center p-[16px]">
+        {confirmacao && plano && <View accessibilityViewIsModal className="w-full max-w-[640px] max-h-[94%] rounded-[15px] border-[1px] p-[20px] bg-[#ffffff] dark:bg-[#182438] border-[#e1e7f0] dark:border-[#33415a]">
+          <View className="flex-row items-center justify-between flex-wrap gap-[12px]">
+            <Text accessibilityRole="header" className="text-[16px] font-bold text-[#17253e] dark:text-[#edf2fc]">{confirmacao.modo === "email" ? "Conferir envio por e-mail" : "Conferir download"}</Text>
             <Botao tema={tema} small label="Fechar" icon="close" onPress={() => setConfirmacao(null)} />
           </View>
-          <ScrollView style={{ maxHeight: compacto ? 410 : 480, marginTop: 14 }} keyboardShouldPersistTaps="handled">
-            <Text style={[s.caption, { color: tema.muted }]}>{eventoNome} · {confirmacao.descricao}</Text>
-            <View style={[s.confirmCount, { backgroundColor: tema.soft }]}>
-              <Text style={[s.statValue, { color: tema.accent }]}>{plano.enviar.length} certificado(s)</Text>
-              <Text style={[s.body, { color: tema.ink }]}>{confirmacao.modo === "email" ? `${plano.destinatarios} endereço(s) de e-mail · ` : ""}{plano.atividades} atividade(s)</Text>
+          <ScrollView className={cx("mt-[14px]", (compacto) ? "max-h-[410px]" : "max-h-[480px]")} keyboardShouldPersistTaps="handled">
+            <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">{eventoNome} · {confirmacao.descricao}</Text>
+            <View className="rounded-[10px] p-[15px] my-[14px] gap-[4px] bg-[#eef4ff] dark:bg-[#243b60]">
+              <Text className="text-[22px] font-bold mb-[3px] text-[#225fe5] dark:text-[#94b9ff]">{plano.enviar.length} certificado(s)</Text>
+              <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc]">{confirmacao.modo === "email" ? `${plano.destinatarios} endereço(s) de e-mail · ` : ""}{plano.atividades} atividade(s)</Text>
             </View>
             {confirmacao.modo === "email" && <>
-              <Text style={[s.body, { color: tema.muted }]}>Cada certificado gera um e-mail separado para o destinatário vinculado a ele. Nenhum endereço é informado manualmente ao PHP.</Text>
+              <Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf]">Cada certificado gera um e-mail separado para o destinatário vinculado a ele. Nenhum endereço é informado manualmente ao PHP.</Text>
               {confirmacao.itens.some(c => c.status === 1) && <Caixa tema={tema} checked={incluirEnviados} onPress={() => setIncluirEnviados(v => !v)}
                 label="Incluir certificados já enviados" texto={`Incluir também os ${confirmacao.itens.filter(c => c.status === 1).length} certificado(s) já enviado(s)`} testID="incluir-enviados" />}
-              {!!plano.jaEnviados.length && <Text style={[s.caption, { color: tema.amber, marginTop: 6 }]}>{plano.jaEnviados.length} já enviado(s) ficarão de fora. Marque a opção acima para reenviar.</Text>}
-              {!!plano.semEmail.length && <Text style={[s.caption, { color: tema.danger, marginTop: 8 }]}>{plano.semEmail.length} certificado(s) sem e-mail válido não serão enviados: {plano.semEmail.map(c => `#${c.cod_certificado} ${c.participante}`).join("; ")}.</Text>}
+              {!!plano.jaEnviados.length && <Text className="text-[11px] leading-[17px] text-[#966118] dark:text-[#f4cc7f] mt-[6px]">{plano.jaEnviados.length} já enviado(s) ficarão de fora. Marque a opção acima para reenviar.</Text>}
+              {!!plano.semEmail.length && <Text className="text-[11px] leading-[17px] text-[#b12b44] dark:text-[#ffadba] mt-[8px]">{plano.semEmail.length} certificado(s) sem e-mail válido não serão enviados: {plano.semEmail.map(c => `#${c.cod_certificado} ${c.participante}`).join("; ")}.</Text>}
             </>}
-            {confirmacao.modo === "download" && <Text style={[s.body, { color: tema.muted }]}>Os PDFs serão baixados separadamente. O navegador pode pedir permissão para múltiplos downloads. Baixar não marca o certificado como enviado por e-mail.</Text>}
-            <Text style={[s.fieldLabel, { color: tema.muted, marginTop: 18 }]}>CERTIFICADOS DESTA OPERAÇÃO</Text>
-            {plano.enviar.length ? plano.enviar.slice(0, 100).map(c => <View key={c.cod_certificado} style={[s.resultLine, { borderColor: tema.line }]}>
-              <Text style={[s.body, { color: tema.ink, fontWeight: "600" }]}>#{c.cod_certificado} · {c.participante}</Text>
-              <Text style={[s.caption, { color: tema.muted, marginTop: 4 }]}>{c.atividade}{confirmacao.modo === "email" ? `\n${c.email}` : ""}</Text>
-            </View>) : <Text style={[s.body, { color: tema.amber, paddingVertical: 16 }]}>Nenhum certificado elegível. Revise os e-mails ou autorize o reenvio dos já enviados.</Text>}
-            {plano.enviar.length > 100 && <Text style={[s.caption, { color: tema.muted }]}>Prévia dos primeiros 100. O lote contém {plano.enviar.length} certificados no total, todos no recorte informado.</Text>}
+            {confirmacao.modo === "download" && <Text className="text-[13px] leading-[20px] text-[#65748b] dark:text-[#abb9cf]">Os PDFs serão baixados separadamente. O navegador pode pedir permissão para múltiplos downloads. Baixar não marca o certificado como enviado por e-mail.</Text>}
+            <Text className="text-[11px] font-semibold tracking-[0.35px] text-[#65748b] dark:text-[#abb9cf] mt-[18px]">CERTIFICADOS DESTA OPERAÇÃO</Text>
+            {plano.enviar.length ? plano.enviar.slice(0, 100).map(c => <View key={c.cod_certificado} className="py-[10px] border-b-[1px] border-[#e1e7f0] dark:border-[#33415a]">
+              <Text className="text-[13px] leading-[20px] text-[#17253e] dark:text-[#edf2fc] font-semibold">#{c.cod_certificado} · {c.participante}</Text>
+              <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf] mt-[4px]">{c.atividade}{confirmacao.modo === "email" ? `\n${c.email}` : ""}</Text>
+            </View>) : <Text className="text-[13px] leading-[20px] text-[#966118] dark:text-[#f4cc7f] py-[16px]">Nenhum certificado elegível. Revise os e-mails ou autorize o reenvio dos já enviados.</Text>}
+            {plano.enviar.length > 100 && <Text className="text-[11px] leading-[17px] text-[#65748b] dark:text-[#abb9cf]">Prévia dos primeiros 100. O lote contém {plano.enviar.length} certificados no total, todos no recorte informado.</Text>}
           </ScrollView>
-          <View style={[s.rowWrap, { justifyContent: "flex-end", marginTop: 18 }]}>
+          <View className="flex-row items-center gap-[8px] flex-wrap max-w-full shrink justify-end mt-[18px]">
             <Botao tema={tema} label="Cancelar" onPress={() => setConfirmacao(null)} />
             <Botao tema={tema} primary icon={confirmacao.modo === "email" ? "send-outline" : "download-outline"}
               label={confirmacao.modo === "email" ? `Confirmar envio (${plano.enviar.length})` : `Iniciar download (${plano.enviar.length})`}
@@ -754,44 +788,4 @@ export default function SendCerticate() {
 function progressoSeguro(concluidos: number, total: number): number {
   return Math.min(1, Math.max(0, concluidos / Math.max(1, total)));
 }
-const s = StyleSheet.create({
-  page: { width: "100%", maxWidth: 1600, alignSelf: "center", paddingTop: 22, gap: 18 },
-  eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 1.5, marginBottom: 8 },
-  title: { fontSize: 27, fontWeight: "700", letterSpacing: -.6 },
-  sectionTitle: { fontSize: 16, fontWeight: "700" },
-  body: { fontSize: 13, lineHeight: 20 },
-  caption: { fontSize: 11, lineHeight: 17 },
-  between: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 },
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  rowWrap: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", maxWidth: "100%", flexShrink: 1 },
-  button: { minHeight: 42, borderWidth: 1, borderRadius: 9, paddingHorizontal: 13, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  buttonSmall: { minHeight: 35, paddingHorizontal: 10, paddingVertical: 6 },
-  buttonText: { fontSize: 12, fontWeight: "600" },
-  stats: { borderRadius: 13, borderWidth: 1, flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 18, paddingVertical: 4 },
-  stat: { minWidth: 130, flexGrow: 1, flexBasis: 130, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 12 },
-  statValue: { fontSize: 22, fontWeight: "700", marginBottom: 3 },
-  panel: { borderRadius: 13, borderWidth: 1, padding: 18, overflow: "hidden" },
-  fields: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 14 },
-  field: { flex: 1, minWidth: 205, gap: 7 },
-  fieldLabel: { fontSize: 11, fontWeight: "600", letterSpacing: .35 },
-  select: { minHeight: 43, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 9 },
-  input: { borderWidth: 1, borderRadius: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 },
-  searchBox: { marginTop: 16, borderRadius: 9, borderWidth: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 9 },
-  searchInput: { flex: 1, height: 44, fontSize: 13, minWidth: 0 },
-  checkTouch: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 6, paddingRight: 5 },
-  checkbox: { width: 19, height: 19, borderWidth: 1.5, borderRadius: 4, alignItems: "center", justifyContent: "center" },
-  selectionBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1 },
-  tableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 15, borderBottomWidth: 1 },
-  cardRow: { flexDirection: "column", alignItems: "stretch", gap: 12 },
-  tableHeading: { fontSize: 10, fontWeight: "700", letterSpacing: .65 },
-  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 8 },
-  empty: { minHeight: 160, padding: 24, gap: 12, justifyContent: "center", alignItems: "center" },
-  notice: { padding: 15, borderRadius: 10, borderWidth: 1 },
-  overlay: { flex: 1, backgroundColor: "rgba(13, 25, 46, 0.55)", alignItems: "center", justifyContent: "center", padding: 16 },
-  modal: { width: "100%", maxWidth: 640, maxHeight: "94%", borderRadius: 15, borderWidth: 1, padding: 20 },
-  option: { flexDirection: "row", alignItems: "center", gap: 9, padding: 13, borderBottomWidth: 1, borderRadius: 7, marginBottom: 3 },
-  count: { fontSize: 11, fontWeight: "700", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  confirmCount: { borderRadius: 10, padding: 15, marginVertical: 14, gap: 4 },
-  resultLine: { paddingVertical: 10, borderBottomWidth: 1 },
-  progressTrack: { height: 6, borderRadius: 10, overflow: "hidden", marginTop: 13 },
-});
+
