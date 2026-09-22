@@ -284,6 +284,7 @@ function sincronizar_certificados_do_evento(
           ON c.`fk_Usuario_ID` = p.`fk_Usuario_ID`
          AND c.`fk_Atividade_ID` = p.`fk_Atividade_ID`
         WHERE a.`fk_Evento_codigo` = ?
+          AND p.`presenca` = 1
           AND c.`codigo` IS NULL
         ORDER BY u.`nome`, a.`nome`
     ';
@@ -448,7 +449,11 @@ try {
           ON u.`ID` = c.`fk_Usuario_ID`
         JOIN ' . qi($tAtividade) . ' AS a
           ON a.`ID` = c.`fk_Atividade_ID`
+        JOIN ' . qi($tParticipa) . ' AS p
+          ON p.`fk_Usuario_ID` = c.`fk_Usuario_ID`
+         AND p.`fk_Atividade_ID` = c.`fk_Atividade_ID`
         WHERE a.`fk_Evento_codigo` = ?
+          AND p.`presenca` = 1
         ORDER BY u.`nome`, a.`nome`, c.`codigo`
     ';
 

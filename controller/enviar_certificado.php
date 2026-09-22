@@ -9,8 +9,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Access-Control-Expose-Headers: Content-Disposition, X-Certificado-Filename, X-Certificado-Status');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('X-Content-Type-Options: nosniff');
+header('X-SICAD-Mobile-Download: email-activity-v2');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     if (ob_get_length()) {
         ob_clean();
     }
@@ -23,58 +26,44 @@ ini_set('html_errors', '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/certificados_acesso.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
 function respond(int $status, array $payload): void
 {
-    if (ob_get_length()) {
-        ob_clean();
-    }
-
-    $payload['versao_enviar_certificado'] = 'X-SICAD-PDF-VERSION: 2026-09-12-wrap-fixed-font';
-
-    http_response_code($status);
-    header('Content-Type: application/json; charset=UTF-8');
-
-    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-
-    if ($json === false) {
-        http_response_code(500);
-        echo '{"success":false,"message":"Falha ao gerar JSON"}';
-        exit;
-    }
-
-    echo $json;
-    exit;
+    $payload['versao_enviar_certificado'] = 'email-activity-download-v2';
+    sc_responder($status, $payload);
 }
 
 function enviar_pdf_para_download(string $pdfPath, string $filename, int $statusAtual): void
 {
-    if (!is_file($pdfPath)) {
-        respond(500, [
-            'success' => false,
-            'message' => 'PDF não encontrado após geração'
-        ]);
+    if (!is_file($pdfPath) || !is_readable($pdfPath)) {
+        throw new RuntimeException('PDF não encontrado após geração.');
     }
-
-    if (ob_get_length()) {
-        ob_clean();
+    $tamanho = filesize($pdfPath);
+    if ($tamanho === false || $tamanho < 5
+        || file_get_contents($pdfPath, false, null, 0, 5) !== '%PDF-') {
+        throw new RuntimeException('O gerador não produziu um PDF válido.');
     }
-
+    // O aplicativo recebe o arquivo em memória antes de salvá-lo.
+    if ($tamanho > 20 * 1024 * 1024) {
+        throw new SicadCertificadoHttpError(
+            'O PDF excede 20 MB. Solicite ao organizador a otimização das imagens do modelo.', 413
+        );
+    }
     $filename = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $filename) ?: 'certificado.pdf';
-
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     http_response_code(200);
     header('Content-Type: application/pdf');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Content-Length: ' . filesize($pdfPath));
+    header('Content-Length: ' . $tamanho);
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
     header('X-Certificado-Filename: ' . $filename);
     header('X-Certificado-Status: ' . $statusAtual);
-
     readfile($pdfPath);
     @unlink($pdfPath);
     exit;
@@ -1208,11 +1197,22 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
 
     if ($temCodigoValidacao && empty($row['codigo_validacao'])) {
         $novo = gerar_codigo_validacao_unico($conn);
-        $u = preparar($conn, 'UPDATE certificado SET codigo_validacao = ? WHERE codigo = ?');
+        // Atribuição condicional: downloads simultâneos não sobrescrevem um código já atribuído.
+        $u = preparar($conn, "UPDATE certificado SET codigo_validacao = ?
+            WHERE codigo = ? AND (codigo_validacao IS NULL OR codigo_validacao = '')");
         $u->bind_param('si', $novo, $certCode);
         executar($u, 'atualização do código de validação');
         $u->close();
-        $row['codigo_validacao'] = $novo;
+        $check = preparar($conn, 'SELECT codigo_validacao FROM certificado WHERE codigo = ? LIMIT 1');
+        $check->bind_param('i', $certCode);
+        executar($check, 'leitura do código de validação');
+        $check->bind_result($codigoFinal);
+        $check->fetch();
+        $check->close();
+        if (!is_string($codigoFinal) || $codigoFinal === '') {
+            throw new RuntimeException('Não foi possível obter o código de validação do certificado.');
+        }
+        $row['codigo_validacao'] = $codigoFinal;
     }
 
     if (empty($row['template_json'])) {
@@ -1371,52 +1371,73 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
     return [$pdfPath, $filename, $row];
 }
 
+/**
+ * APLICATIVO EXTERNO:
+ * POST {"email":"participante@example.com","atividade_id":45,"event_id":12,"modo":"download"}
+ * event_id é opcional no download; atividade_id é o ID do SICAD retornado na lista.
+ * Não usa userId nem o token do SICAD para localizar o participante externo.
+ * ATENÇÃO: e-mail é filtro, não autenticação. Proteger este ramo na integração externa.
+ *
+ * PAINEL SICAD (fluxo anterior, separado):
+ * POST {"cod_certificado":123,"modo":"email"|"download"} + Authorization: Bearer <token SICAD>.
+ * Não emite um certificado novo. Reutiliza o registro existente e o gerador original.
+ */
 try {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        respond(405, [
-            'success' => false,
-            'message' => 'Método não permitido'
-        ]);
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        header('Allow: POST, OPTIONS');
+        respond(405, ['success' => false, 'message' => 'Método não permitido. Use POST.']);
     }
 
-    if (!isset($conn) || !($conn instanceof mysqli)) {
-        respond(500, [
-            'success' => false,
-            'message' => 'Conexão com o banco não encontrada'
-        ]);
+    $input = sc_ler_json();
+    $porAtividade = array_key_exists('atividade_id', $input) || array_key_exists('email', $input);
+    $modoRaw = $input['modo'] ?? $input['acao'] ?? ($porAtividade ? 'download' : 'email');
+    if (!is_string($modoRaw)) {
+        throw new SicadCertificadoHttpError('Modo inválido. Use download ou email.', 400);
     }
-
-    $conn->set_charset('utf8mb4');
-
-    $raw = file_get_contents('php://input');
-    $input = json_decode((string) $raw, true);
-
-    if (!is_array($input)) {
-        respond(400, [
-            'success' => false,
-            'message' => 'Body não veio como JSON válido',
-            'raw' => $raw
-        ]);
-    }
-
-    $certCode = trim((string) ($input['cod_certificado'] ?? $input['codigo'] ?? ''));
-    if ($certCode === '' || !ctype_digit($certCode)) {
-        respond(400, [
-            'success' => false,
-            'message' => 'cod_certificado não informado ou inválido'
-        ]);
-    }
-
-    $modo = strtolower(trim((string) ($input['modo'] ?? $input['acao'] ?? 'email')));
+    $modo = strtolower(trim($modoRaw));
     if (!in_array($modo, ['download', 'baixar', 'pdf', 'email', 'enviar'], true)) {
-        respond(400, [
-            'success' => false,
-            'message' => 'Modo inválido. Use download ou email.'
-        ]);
+        throw new SicadCertificadoHttpError('Modo inválido. Use download ou email.', 400);
+    }
+    $download = in_array($modo, ['download', 'baixar', 'pdf'], true);
+    if ($porAtividade) {
+        if (!$download || array_key_exists('cod_certificado', $input) || array_key_exists('codigo', $input)) {
+            throw new SicadCertificadoHttpError(
+                'Por e-mail, envie email, atividade_id, event_id opcional e modo download; não envie código de certificado.', 400
+            );
+        }
+        sc_rejeitar_ids_usuario($input);
+        $email = sc_email($input['email'] ?? null);
+        $atividadeId = sc_id($input['atividade_id'] ?? null, 'atividade_id');
+        $eventoId = array_key_exists('event_id', $input) ? sc_id($input['event_id'], 'event_id') : null;
+        $conn = sc_conectar();
+        // Busca diretamente por email + atividade. Nenhum ID de usuário externo participa.
+        $certCode = sc_certificado_por_email($conn, $email, $atividadeId, $eventoId);
+    } else {
+        // O painel antigo permanece separado e continua exigindo sua autenticação local.
+        $token = sc_token();
+        $certCode = sc_id($input['cod_certificado'] ?? $input['codigo'] ?? null, 'cod_certificado');
+        $conn = sc_conectar();
+        $usuarioId = sc_usuario_autenticado($conn, $token);
+        sc_autorizar_codigo($conn, $usuarioId, $certCode, $download);
+    }
+
+    require_once __DIR__ . '/vendor/autoload.php';
+    if (!class_exists('TCPDF')) {
+        throw new RuntimeException('TCPDF não está disponível no autoload do servidor.');
     }
 
     [$pdfPath, $filename, $row] = montar_pdf_certificado($conn, (int) $certCode);
 
+    // Confere a atividade, o e-mail e o vínculo novamente antes de entregar o arquivo.
+    // O usuario_id retornado pelo gerador é interno ao SICAD; não é comparado ao ID do outro app.
+    if ($porAtividade && (
+        (int) $row['atividade_id'] !== $atividadeId
+        || ($eventoId !== null && (int) $row['evento_id'] !== $eventoId)
+        || strcasecmp(trim((string) $row['email_usuario']), $email) !== 0
+        || sc_certificado_por_email($conn, $email, $atividadeId, $eventoId) !== (int) $certCode
+    )) {
+        throw new SicadCertificadoHttpError('Os dados do certificado foram alterados. Atualize a lista.', 409);
+    }
     $statusAtual = (int) ($row['status_envio'] ?? 0);
 
     // Download não marca o certificado como enviado.
@@ -1426,8 +1447,8 @@ try {
     }
 
     // Configure as credenciais no ambiente do processo PHP; nunca no código-fonte.
-    $smtpUser = getenv('SICAD_SMTP_USER') ?: 'sicad.certificados@gmail.com';
-    $smtpPass = getenv('SICAD_SMTP_PASS') ?: 'dtrt frya etbb ohhy';
+    $smtpUser = getenv('SICAD_SMTP_USER') ?: '';
+    $smtpPass = getenv('SICAD_SMTP_PASS') ?: '';
 
     if ($smtpUser === '' || $smtpPass === '') {
         @unlink($pdfPath);
@@ -1621,8 +1642,12 @@ try {
     if (isset($pdfPath) && is_string($pdfPath) && is_file($pdfPath)) {
         @unlink($pdfPath);
     }
-    respond($e instanceof DomainException ? 422 : 500, [
+    $http = $e instanceof SicadCertificadoHttpError ? $e->getCode()
+        : ($e instanceof DomainException ? 422 : 500);
+    respond($http, [
         'success' => false,
-        'message' => $e->getMessage()
+        'message' => ($e instanceof SicadCertificadoHttpError || $e instanceof DomainException)
+            ? $e->getMessage()
+            : 'Não foi possível gerar ou enviar o certificado. Solicite a verificação ao organizador.'
     ]);
 }

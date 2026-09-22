@@ -169,6 +169,12 @@ try {
             $resultado["total_atividades"]++;
             $eventoResumo["atividades"]++;
 
+            // Mantém os contadores de ausência, mesmo com a lista já filtrada.
+            $ignoradosPorAusencia = $atividade["participantes_ignorados_por_ausencia"];
+            $resultado["total_certificados_nao_emitidos_por_ausencia"] += $ignoradosPorAusencia;
+            $eventoResumo["certificados_nao_emitidos_por_ausencia"] += $ignoradosPorAusencia;
+
+            // Somente os presentes chegam ao vínculo na atividade e à emissão.
             foreach ($atividade["participantes"] as $indiceParticipante => $participante) {
                 validarPessoa(
                     $participante,
@@ -183,26 +189,21 @@ try {
                     $eventoResumo["participantes_vinculados"]++;
                 }
 
-                if (participanteEstaPresente($participante)) {
-                    $certificadoCriado = inserirCertificadoSeNaoExistir(
-                        $conn,
-                        $usuarioId,
-                        $atividadeId,
-                        $participante,
-                        $atividade,
-                        $evento
-                    );
+                $certificadoCriado = inserirCertificadoSeNaoExistir(
+                    $conn,
+                    $usuarioId,
+                    $atividadeId,
+                    $participante,
+                    $atividade,
+                    $evento
+                );
 
-                    if ($certificadoCriado) {
-                        $resultado["total_certificados_emitidos"]++;
-                        $eventoResumo["certificados_emitidos"]++;
-                    } else {
-                        $resultado["total_certificados_ja_existentes"]++;
-                        $eventoResumo["certificados_ja_existentes"]++;
-                    }
+                if ($certificadoCriado) {
+                    $resultado["total_certificados_emitidos"]++;
+                    $eventoResumo["certificados_emitidos"]++;
                 } else {
-                    $resultado["total_certificados_nao_emitidos_por_ausencia"]++;
-                    $eventoResumo["certificados_nao_emitidos_por_ausencia"]++;
+                    $resultado["total_certificados_ja_existentes"]++;
+                    $eventoResumo["certificados_ja_existentes"]++;
                 }
             }
 
@@ -216,7 +217,7 @@ try {
 
     responder([
         "ok" => true,
-        "mensagem" => "JSON importado com sucesso. Certificados emitidos somente para inscritos de atividade com presente=true.",
+        "mensagem" => "JSON importado com sucesso. Somente participantes com presença confirmada na respectiva atividade foram vinculados com presenca=1 e considerados para emissão de certificados.",
         "resultado" => $resultado,
     ]);
 } catch (Throwable $e) {
@@ -437,7 +438,7 @@ function arrayEhLista(array $array): bool
     return $array === [] || array_keys($array) === range(0, count($array) - 1);
 }
 
-function normalizarListaObjetos($valor, string $campo, callable $detectorObjetoUnico = null): array
+function normalizarListaObjetos($valor, string $campo, ?callable $detectorObjetoUnico = null): array
 {
     if ($valor === null || $valor === "") {
         return [];
@@ -649,7 +650,10 @@ function normalizarAtividade(
         throw new RuntimeException("Evento {$indiceEvento}, atividade {$indiceAtividade}: campo 'nome' é obrigatório.");
     }
 
-    $participantes = normalizarListaPessoas($atividade["inscritos"] ?? $atividade["participantes"] ?? []);
+    $inscritos = normalizarListaPessoas($atividade["inscritos"] ?? $atividade["participantes"] ?? []);
+
+    // A presença é individual por atividade. Não herda a presença geral do evento.
+    $participantes = array_values(array_filter($inscritos, "participanteEstaPresente"));
     $modalidade = $atividade["modalidade"] ?? $evento["categoria"] ?? "presencial";
 
     $dataInicio = null;
@@ -691,6 +695,7 @@ function normalizarAtividade(
         "status_atividade" => normalizarStatusAtividade((string) ($atividade["status_atividade"] ?? "confirmada")),
         "modalidade" => normalizarModalidade((string) $modalidade),
         "participantes" => $participantes,
+        "participantes_ignorados_por_ausencia" => count($inscritos) - count($participantes),
     ];
 }
 
@@ -1123,6 +1128,7 @@ function vincularGerencia(mysqli $conn, int $usuarioId, int $eventoId): bool
 
 function vincularParticipanteNaAtividade(mysqli $conn, int $usuarioId, int $atividadeId): bool
 {
+    // O chamador usa a lista de presentes produzida por normalizarAtividade().
     $row = buscarUm(
         $conn,
         "SELECT 1 AS existe
@@ -1135,13 +1141,26 @@ function vincularParticipanteNaAtividade(mysqli $conn, int $usuarioId, int $ativ
     );
 
     if ($row !== null) {
+        // Confirma a presença deste par usuário/atividade, sem duplicar o vínculo.
+        $stmt = executar(
+            $conn,
+            "UPDATE participa
+             SET presenca = 1
+             WHERE fk_usuario_id = ?
+               AND fk_atividade_id = ?",
+            "ii",
+            [$usuarioId, $atividadeId]
+        );
+        $stmt->close();
+
+        // false continua significando que nenhum vínculo novo foi criado.
         return false;
     }
 
     $stmt = executar(
         $conn,
-        "INSERT INTO participa (fk_usuario_id, fk_atividade_id)
-         VALUES (?, ?)",
+        "INSERT INTO participa (fk_usuario_id, fk_atividade_id, presenca)
+         VALUES (?, ?, 1)",
         "ii",
         [$usuarioId, $atividadeId]
     );
@@ -1160,6 +1179,7 @@ function atualizarNumeroParticipantesAtividade(mysqli $conn, int $atividadeId): 
             SELECT COUNT(*)
             FROM participa
             WHERE fk_atividade_id = ?
+              AND presenca = 1
          )
          WHERE id = ?",
         "ii",
