@@ -2,7 +2,7 @@
 ob_start();
 
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, OPTIONS");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Content-Type: application/json; charset=UTF-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -39,7 +39,7 @@ $input = json_decode(file_get_contents("php://input"), true);
 if (!is_array($input)) {
     respond(400, [
         "success" => false,
-        "pessoas" => [],
+        "eventos" => [],
         "message" => "Body JSON inválido"
     ]);
 }
@@ -69,6 +69,11 @@ $sql = "
 ";
 
 $stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    throw new RuntimeException($conn->error);
+}
+
 $stmt->bind_param("s", $email);
 
 if (!$stmt->execute()) {
@@ -91,12 +96,12 @@ if (!$result) {
     ]);
 }
 
-$eventos =[];
+$eventos = [];
 
-while($row = $result->fetch_assoc()) {
+while ($row = $result->fetch_assoc()) {
     $eventos[] = [
         "id" => (int)($row["codigo"] ?? 0),
-        "nome" => (string)($row["nome"] ?? 0),
+        "nome" => (string)($row["nome"] ?? "")
     ];
 }
 
