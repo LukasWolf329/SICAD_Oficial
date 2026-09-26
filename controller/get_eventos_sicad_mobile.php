@@ -7,7 +7,7 @@ header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header("Content-Type: application/json; charset=UTF-8");
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+if (($_SERVER["REQUEST_METHOD"] ?? "") === "OPTIONS") {
     http_response_code(204);
     exit;
 }
@@ -34,6 +34,14 @@ function respond(int $status, array $payload): void
     exit;
 }
 
+if (($_SERVER["REQUEST_METHOD"] ?? "") !== "POST") {
+    respond(405, [
+        "success" => false,
+        "eventos" => [],
+        "message" => "Método não permitido"
+    ]);
+}
+
 $input = json_decode(file_get_contents("php://input"), true);
 
 if (!is_array($input)) {
@@ -44,55 +52,120 @@ if (!is_array($input)) {
     ]);
 }
 
-$email = isset($input["email"]) ? $input["email"] : "";
+$email = trim((string)($input["email"] ?? ""));
 
-if($email == "") {
+if ($email === "") {
     respond(400, [
         "success" => false,
         "eventos" => [],
-        "message" => "email não enviado"
+        "message" => "E-mail não enviado"
     ]);
 }
 
+if (
+    strlen($email) > 254 ||
+    !filter_var($email, FILTER_VALIDATE_EMAIL)
+) {
+    respond(400, [
+        "success" => false,
+        "eventos" => [],
+        "message" => "E-mail inválido"
+    ]);
+}
+
+/*
+ * Não depende de vw_usuarios_evento.
+ *
+ * Um evento é retornado quando o usuário:
+ * 1) gerencia diretamente o evento; OU
+ * 2) participa de pelo menos uma atividade pertencente ao evento.
+ *
+ * A consulta parte de usuario.email e usa somente as tabelas físicas:
+ * usuario, evento, gerencia, participa e atividade.
+ */
 $sql = "
     SELECT DISTINCT
         e.codigo,
-        e.nome
+        e.nome,
+        e.data_inicio
     FROM evento AS e
 
-    INNER JOIN vw_usuarios_evento AS v
-        ON v.evento_id = e.codigo
+    INNER JOIN (
+        /* Usuário como organizador */
+        SELECT
+            g.fk_Evento_codigo AS evento_codigo
+        FROM usuario AS u
+        INNER JOIN gerencia AS g
+            ON g.fk_Usuario_ID = u.ID
+        WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(?))
 
-    WHERE v.usuario_email = ?
+        UNION
 
-    ORDER BY e.data_inicio DESC
+        /* Usuário registrado em atividade */
+        SELECT
+            a.fk_Evento_codigo AS evento_codigo
+        FROM usuario AS u
+        INNER JOIN participa AS p
+            ON p.fk_Usuario_ID = u.ID
+        INNER JOIN atividade AS a
+            ON a.ID = p.fk_Atividade_ID
+        WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(?))
+
+        UNION
+
+        /* Usuário com certificado emitido */
+        SELECT
+            a.fk_Evento_codigo AS evento_codigo
+        FROM usuario AS u
+        INNER JOIN certificado AS c
+            ON c.fk_Usuario_ID = u.ID
+        INNER JOIN atividade AS a
+            ON a.ID = c.fk_Atividade_ID
+        WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(?))
+    ) AS vinculos
+        ON vinculos.evento_codigo = e.codigo
+
+    ORDER BY e.data_inicio DESC, e.codigo DESC
 ";
 
 $stmt = $conn->prepare($sql);
 
 if (!$stmt) {
-    throw new RuntimeException($conn->error);
-}
-
-$stmt->bind_param("s", $email);
-
-if (!$stmt->execute()) {
     respond(500, [
         "success" => false,
-        "pessoas" => [],
-        "message" => "Erro ao executar consulta",
-        "debug" => $stmt->error
+        "eventos" => [],
+        "message" => "Erro ao preparar consulta"
+    ]);
+}
+
+$stmt->bind_param(
+    "sss",
+    $email,
+    $email,
+    $email
+);
+
+if (!$stmt->execute()) {
+    $stmt->close();
+    $conn->close();
+
+    respond(500, [
+        "success" => false,
+        "eventos" => [],
+        "message" => "Erro ao executar consulta"
     ]);
 }
 
 $result = $stmt->get_result();
 
 if (!$result) {
+    $stmt->close();
+    $conn->close();
+
     respond(500, [
         "success" => false,
-        "pessoas" => [],
-        "message" => "Erro ao obter resultado",
-        "debug" => $stmt->error
+        "eventos" => [],
+        "message" => "Erro ao obter resultado"
     ]);
 }
 
@@ -101,7 +174,7 @@ $eventos = [];
 while ($row = $result->fetch_assoc()) {
     $eventos[] = [
         "id" => (int)($row["codigo"] ?? 0),
-        "nome" => (string)($row["nome"] ?? "")
+        "nome" => trim((string)($row["nome"] ?? ""))
     ];
 }
 

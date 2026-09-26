@@ -38,16 +38,51 @@ try {
     $conn = sc_conectar();
 
     $stmt = $conn->prepare(
-        'SELECT a.ID, COALESCE(a.nome, \'Atividade\'),
-            EXISTS(SELECT 1 FROM certificado c
-                   WHERE c.fk_Atividade_ID = a.ID AND c.fk_Usuario_ID = u.ID),
-            EXISTS(SELECT 1 FROM templatecertificado t WHERE t.fk_Atividade_ID = a.ID)
-         FROM atividade a
-         JOIN participa p ON p.fk_Atividade_ID = a.ID
-         JOIN usuario u ON u.ID = p.fk_Usuario_ID
-         WHERE a.fk_Evento_codigo = ? AND u.email = ? AND p.presenca = 1
-         ORDER BY a.nome ASC, a.ID ASC'
-    );
+    'SELECT DISTINCT
+        a.ID,
+        COALESCE(a.nome, \'Atividade\') AS nome,
+
+        EXISTS(
+            SELECT 1
+            FROM certificado c
+            WHERE c.fk_Atividade_ID = a.ID
+              AND c.fk_Usuario_ID = u.ID
+        ) AS emitido,
+
+        EXISTS(
+            SELECT 1
+            FROM templatecertificado t
+            WHERE t.fk_Atividade_ID = a.ID
+        ) AS modelo
+
+     FROM usuario u
+
+     INNER JOIN atividade a
+         ON a.fk_Evento_codigo = ?
+
+     WHERE LOWER(TRIM(u.email)) = LOWER(TRIM(?))
+
+       AND (
+            EXISTS(
+                SELECT 1
+                FROM participa p
+                WHERE p.fk_Atividade_ID = a.ID
+                  AND p.fk_Usuario_ID = u.ID
+                  AND p.presenca = 1
+            )
+
+            OR
+
+            EXISTS(
+                SELECT 1
+                FROM certificado c
+                WHERE c.fk_Atividade_ID = a.ID
+                  AND c.fk_Usuario_ID = u.ID
+            )
+       )
+
+     ORDER BY a.nome ASC, a.ID ASC'
+);
     $stmt->bind_param('is', $eventoId, $email);
     $stmt->execute();
     $stmt->bind_result($id, $nome, $emitido, $modelo);
