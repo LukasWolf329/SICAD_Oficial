@@ -156,11 +156,18 @@ try {
 
     if (!$result || $result->num_rows === 0) {
         $stmt->close();
-        respond(404, [
-            "success" => false,
-            "sucesso" => false,
-            "message" => "Template não encontrado",
-            "mensagem" => "Template não encontrado"
+        // Uma atividade nova ainda não tem linha em templatecertificado.
+        // Isso é um estado válido do editor: ele deve abrir um canvas vazio
+        // para que o primeiro modelo possa ser escolhido e salvo.
+        respond(200, [
+            "success" => true,
+            "sucesso" => true,
+            "template" => null,
+            "data" => null,
+            "template_exists" => false,
+            "atividade_id" => $atividadeId > 0 ? $atividadeId : null,
+            "message" => "Nenhum template salvo para esta atividade",
+            "mensagem" => "Nenhum template salvo para esta atividade"
         ]);
     }
 

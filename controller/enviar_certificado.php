@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 ob_start();
-header('X-SICAD-PDF-VERSION: 2026-09-12-wrap-fixed-font');
-header('X-Enviar-Certificado-Version: sicad-2026-09-12-wrap-fixed-font');
+header('X-SICAD-PDF-VERSION: 2026-10-20-duration-minutes');
+header('X-Enviar-Certificado-Version: sicad-2026-10-20-duration-minutes');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
@@ -492,10 +492,101 @@ function align_fabric_to_tcpdf($a): string
 
 function replace_placeholders($text, array $map): string
 {
+    $text = (string) $text;
+
+    // O modelo criado pelo editor historicamente usa
+    // "{{CARGA_HORARIA}} horas". Quando o valor já vem formatado como
+    // "1 hora e 40 minutos", consumir o sufixo evita o texto duplicado
+    // "1 hora e 40 minutos horas". Para valores numéricos, o comportamento
+    // antigo é preservado.
+    $text = preg_replace_callback(
+        '/\{\{\s*(CARGA_HORARIA|CARGA)\s*\}\}(\s+)(horas?)\b/iu',
+        function ($m) use ($map) {
+            $k = strtoupper($m[1]);
+            $valor = array_key_exists($k, $map) ? (string) $map[$k] : '';
+
+            if (preg_match('/\b(?:hora|horas|minuto|minutos)\b/iu', $valor) === 1) {
+                return $valor;
+            }
+
+            return $valor . $m[2] . $m[3];
+        },
+        $text
+    ) ?? $text;
+
     return preg_replace_callback('/\{\{\s*([A-Z0-9_]+)\s*\}\}/i', function ($m) use ($map) {
         $k = strtoupper($m[1]);
         return array_key_exists($k, $map) ? (string) $map[$k] : '';
-    }, (string) $text);
+    }, $text) ?? $text;
+}
+
+/**
+ * Extrai os horários que a importação JSON salva em informacoes_atividade.
+ * O banco continua podendo manter carga_horaria como inteiro para preservar
+ * compatibilidade com relatórios antigos; a emissão usa a duração real quando
+ * esses horários estão disponíveis.
+ */
+function duracao_minutos_da_atividade(?string $informacoes): ?int
+{
+    if ($informacoes === null || trim($informacoes) === '') {
+        return null;
+    }
+
+    $padraoInicio = '/Hor(?:á|a)rio\s+de\s+in[ií]cio\s*:\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/iu';
+    $padraoFim = '/Hor(?:á|a)rio\s+de\s+fim\s*:\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/iu';
+
+    $ocorrenciasInicio = [];
+    $ocorrenciasFim = [];
+
+    if (preg_match_all($padraoInicio, $informacoes, $ocorrenciasInicio, PREG_SET_ORDER) < 1
+        || preg_match_all($padraoFim, $informacoes, $ocorrenciasFim, PREG_SET_ORDER) < 1) {
+        return null;
+    }
+
+    // A descrição livre pode conter um exemplo de horário antes das linhas
+    // adicionadas pela importação. As últimas ocorrências são as canônicas.
+    $inicio = $ocorrenciasInicio[count($ocorrenciasInicio) - 1];
+    $fim = $ocorrenciasFim[count($ocorrenciasFim) - 1];
+
+    $horaInicio = (int) $inicio[1];
+    $minutoInicio = (int) $inicio[2];
+    $segundoInicio = isset($inicio[3]) && $inicio[3] !== '' ? (int) $inicio[3] : 0;
+    $horaFim = (int) $fim[1];
+    $minutoFim = (int) $fim[2];
+    $segundoFim = isset($fim[3]) && $fim[3] !== '' ? (int) $fim[3] : 0;
+
+    if ($horaInicio > 23 || $minutoInicio > 59 || $segundoInicio > 59
+        || $horaFim > 23 || $minutoFim > 59 || $segundoFim > 59) {
+        return null;
+    }
+
+    $inicioSegundos = ($horaInicio * 3600) + ($minutoInicio * 60) + $segundoInicio;
+    $fimSegundos = ($horaFim * 3600) + ($minutoFim * 60) + $segundoFim;
+    $diferencaSegundos = $fimSegundos - $inicioSegundos;
+
+    if ($diferencaSegundos <= 0) {
+        return null;
+    }
+
+    return intdiv($diferencaSegundos, 60);
+}
+
+function formatar_duracao_minutos(int $minutos): string
+{
+    $minutos = max(0, $minutos);
+    $horas = intdiv($minutos, 60);
+    $restantes = $minutos % 60;
+    $partes = [];
+
+    if ($horas > 0) {
+        $partes[] = $horas . ($horas === 1 ? ' hora' : ' horas');
+    }
+
+    if ($restantes > 0) {
+        $partes[] = $restantes . ($restantes === 1 ? ' minuto' : ' minutos');
+    }
+
+    return count($partes) > 0 ? implode(' e ', $partes) : '0 minutos';
 }
 
 function texto_contem_tag_dinamica($text): bool
@@ -870,10 +961,21 @@ function sicad_preparar_texto(
     );
     $label = preg_replace('/\s+/u', ' ', $raw) ?: 'bloco de texto';
     preg_match('/^.{0,70}/us', $label, $labelMatch);
+    // O TCPDF pode esticar também a última linha quando recebe alinhamento
+    // justificado. Em textos com campos dinâmicos isso separa visualmente
+    // partes de um valor substituído, por exemplo: "1 hora e 40 minutos".
+    // Mantemos o alinhamento escolhido para textos estáticos, mas usamos
+    // alinhamento à esquerda quando o bloco contém tags que serão trocadas
+    // na emissão, preservando o texto substituído como uma frase contínua.
+    $align = align_fabric_to_tcpdf($obj['textAlign'] ?? 'left');
+    if ($align === 'J' && texto_contem_tag_dinamica($raw)) {
+        $align = 'L';
+    }
+
     $box = [
         'x' => $xMm, 'y' => $yMm, 'w' => $cellW, 'h' => $height,
         'text' => $text, 'fontPt' => $fontPt, 'angle' => $angle,
-        'align' => align_fabric_to_tcpdf($obj['textAlign'] ?? 'left'),
+        'align' => $align,
         'maxHeight' => max(0.0, (float) ($obj['sicadMaxHeight'] ?? 0)) * $sy * $scale,
         'label' => $labelMatch[0] ?? 'bloco de texto',
     ];
@@ -1176,7 +1278,7 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
         JOIN usuario u ON u.ID = c.fk_Usuario_ID
         JOIN atividade a ON a.ID = c.fk_Atividade_ID
         JOIN evento e ON e.codigo = a.fk_Evento_codigo
-        JOIN templatecertificado t ON t.fk_Atividade_ID = c.fk_Atividade_ID
+        LEFT JOIN templatecertificado t ON t.fk_Atividade_ID = c.fk_Atividade_ID
         WHERE c.codigo = ?
         ORDER BY t.id DESC
         LIMIT 1
@@ -1191,8 +1293,15 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
     if (!$row) {
         respond(404, [
             'success' => false,
-            'message' => 'Certificado não encontrado ou atividade sem template salvo'
+            'message' => 'Certificado ou atividade não encontrado'
         ]);
+    }
+
+    if (empty($row['template_json'])) {
+        throw new SicadCertificadoHttpError(
+            'Esta atividade ainda não possui um template de certificado salvo. Abra o editor, escolha um modelo, clique em Salvar agora e tente novamente.',
+            409
+        );
     }
 
     if ($temCodigoValidacao && empty($row['codigo_validacao'])) {
@@ -1289,6 +1398,25 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
             $cargaHoraria = (int) ($row['atividade_carga_horaria'] ?? 0);
         }
 
+        $informacoesAtividade = trim((string) ($row['informacoes_atividade'] ?? ''));
+        $cargaMinutos = duracao_minutos_da_atividade(
+            $informacoesAtividade !== '' ? $informacoesAtividade : null
+        );
+
+        // Certificados antigos podem ter guardado as informações somente em
+        // c.descricao. Só usa esse campo quando a atividade não forneceu um
+        // intervalo válido, evitando que uma descrição livre sobrescreva os
+        // horários canônicos da atividade.
+        if ($cargaMinutos === null) {
+            $descricaoCertificado = trim((string) ($row['certificado_descricao'] ?? ''));
+            $cargaMinutos = duracao_minutos_da_atividade(
+                $descricaoCertificado !== '' ? $descricaoCertificado : null
+            );
+        }
+        $cargaTexto = $cargaMinutos !== null
+            ? formatar_duracao_minutos($cargaMinutos)
+            : formatar_duracao_minutos(max(0, $cargaHoraria) * 60);
+
         $dataEmissao = $row['data_emissao'] ?: date('Y-m-d');
 
         $map = [
@@ -1313,8 +1441,8 @@ function montar_pdf_certificado(mysqli $conn, int $certCode): array
             'DATA_EMISSAO' => formatar_data_br($dataEmissao),
             'DATA_INICIO' => formatar_data_br($row['evento_data_inicio'] ?? ''),
             'DATA_FIM' => formatar_data_br($row['evento_data_fim'] ?? ''),
-            'CARGA_HORARIA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
-            'CARGA' => $cargaHoraria > 0 ? (string) $cargaHoraria : '',
+            'CARGA_HORARIA' => $cargaHoraria > 0 || $cargaMinutos !== null ? $cargaTexto : '',
+            'CARGA' => $cargaHoraria > 0 || $cargaMinutos !== null ? $cargaTexto : '',
         ];
 
         $pdfPath = sys_get_temp_dir() . '/certificado_' . preg_replace('/[^A-Za-z0-9]/', '', $codigoValidacao) . '_' . uniqid() . '.pdf';

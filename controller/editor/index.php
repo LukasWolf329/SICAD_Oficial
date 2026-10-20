@@ -2163,7 +2163,7 @@
         if (isLoading) return;
         const width = safeArea.right - safeArea.left;
         const text = new fabric.Textbox(
-          'Certificamos que {{NOME}} participou da atividade {{ATIVIDADE}}, com carga horária de {{CARGA_HORARIA}} horas.', {
+          'Certificamos que {{NOME}} participou da atividade {{ATIVIDADE}}, com carga horária de {{CARGA_HORARIA}}.', {
             left: safeArea.left,
             top: Math.max(safeArea.top, canvas.height * .32),
             width,
@@ -2171,7 +2171,9 @@
             fontSize: 24,
             fontFamily: 'Arial',
             fill: '#000000',
-            textAlign: 'justify-left',
+            // O texto contém tags dinâmicas que podem virar uma frase maior
+            // na emissão. Esquerda evita que a última linha seja esticada.
+            textAlign: 'left',
             lineHeight: 1.25,
             editable: true
           });
@@ -2621,10 +2623,11 @@
         return state;
       }
       class SaveRequestError extends Error {
-        constructor(message, retryable = false) {
+        constructor(message, retryable = false, status = 0) {
           super(message);
           this.name = 'SaveRequestError';
           this.retryable = retryable;
+          this.status = status;
         }
       }
 
@@ -2639,18 +2642,18 @@
           let data;
           try { data = JSON.parse(raw); }
           catch (_) {
-            throw new SaveRequestError('O servidor não retornou JSON válido. Verifique sua conexão, sessão e o endpoint configurado.', retryable);
+            throw new SaveRequestError('O servidor não retornou JSON válido. Verifique sua conexão, sessão e o endpoint configurado.', retryable, response.status);
           }
           if (!response.ok || !data || !data.success) {
-            throw new SaveRequestError((data && data.message) || 'A operação não foi concluída pelo servidor.', retryable);
+            throw new SaveRequestError((data && data.message) || 'A operação não foi concluída pelo servidor.', retryable, response.status);
           }
           return data;
         } catch (error) {
           if (error instanceof SaveRequestError) throw error;
           if (error.name === 'AbortError') {
-            throw new SaveRequestError('O servidor demorou para responder. O salvamento ainda não foi confirmado.', true);
+            throw new SaveRequestError('O servidor demorou para responder. O salvamento ainda não foi confirmado.', true, 0);
           }
-          throw new SaveRequestError('Falha de conexão ao salvar ou carregar o modelo. Mantenha a página aberta e verifique sua conexão.', true);
+          throw new SaveRequestError('Falha de conexão ao salvar ou carregar o modelo. Mantenha a página aberta e verifique sua conexão.', true, 0);
         } finally {
           window.clearTimeout(timeout);
         }
@@ -2843,6 +2846,22 @@
           syncUnloadGuard();
           setSaveState('saved', 'Modelo carregado', 'O salvamento automático está ativo.');
         } catch (error) {
+          // Compatibilidade com servidores que ainda respondem 404 quando a
+          // atividade não possui template. Esse 404 representa canvas vazio,
+          // não uma falha de carregamento do editor.
+          if (error instanceof SaveRequestError && error.status === 404
+            && /template/i.test(error.message || '')) {
+            initialLoadVerified = true;
+            lastSavedJSON = JSON.stringify(canvasSnapshot());
+            dirty = false;
+            autosavePaused = false;
+            lastSaveFailure = null;
+            retryAttempt = 0;
+            retryAt = 0;
+            syncUnloadGuard();
+            setSaveState('ready', 'Salvamento automático ativo', 'Nenhum template salvo. Escolha um modelo para começar.');
+            return;
+          }
           initialLoadVerified = false;
           setSaveState('error', 'Falha ao carregar · recarregue', 'O salvamento foi bloqueado para não sobrescrever um modelo que não foi carregado corretamente.');
           toast((error.message || 'Não foi possível carregar o modelo.') + ' Recarregue a página antes de editar; o salvamento está bloqueado por segurança.', 'error', 10000);
